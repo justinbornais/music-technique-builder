@@ -1,6 +1,7 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Annotation,
+  Barline,
   Renderer,
   Stave,
   StaveNote,
@@ -13,26 +14,24 @@ export default function CScale() {
   const containerRef = useRef(null);
 
   useEffect(() => {
+    const width = 960;
     const div = containerRef.current;
     if (!div) return;
   
     div.innerHTML = '';
   
     const renderer = new Renderer(div, Renderer.Backends.SVG);
-    renderer.resize(700, 180);
+    renderer.resize(width, 100);
     const context = renderer.getContext();
     context.setFont('Arial', 10, '').setBackgroundFillStyle('#fff');
-    const width = 700;
   
-    const stave = new Stave(0, 0);
-    stave.setWidth(width);
+    const stave = new Stave(0, 0, width - 4);
     stave.addClef('treble');
+    stave.setEndBarType(Barline.type.DOUBLE);
     stave.setContext(context).draw();
   
     const ascending = ['c/4', 'd/4', 'e/4', 'f/4', 'g/4', 'a/4', 'b/4', 'c/5'];
     const descending = [...ascending].reverse();
-
-    console.log(descending);
   
     const notes = [...ascending, ...descending].map((note, i) => {
       const sn = new StaveNote({ keys: [note], duration: '8' });
@@ -55,8 +54,11 @@ export default function CScale() {
 
   return (
     <div>
-      <h2>C Major Scale (Ascending and Descending)</h2>
-      <div ref={containerRef} style={{ border: '1px solid #ccc', padding: '1rem' }} />
+      <h2 style={{ textAlign: "center" }}>C Major</h2>
+      <div ref={containerRef} style={{
+        maxWidth: '960px',
+        margin: '0 auto', // Horizontal centering.
+      }} />
     </div>
   );
 }
