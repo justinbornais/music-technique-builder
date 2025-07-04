@@ -27,7 +27,7 @@ export default function CScale() {
   
     const stave = new Stave(0, 0, width - 4);
     stave.addClef('treble');
-    stave.setEndBarType(Barline.type.DOUBLE);
+    stave.setEndBarType(Barline.type.END);
     stave.setContext(context).draw();
   
     const ascending = ['c/4', 'd/4', 'e/4', 'f/4', 'g/4', 'a/4', 'b/4', 'c/5'];
