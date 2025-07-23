@@ -27,7 +27,8 @@ export default function CScaleTwoStaves() {
     context.setFont('Arial', 10, '').setBackgroundFillStyle('#fff');
   
     // Treble Clef.
-    const trebleStaff = new Stave(0, 0, width - 4); // Subtract 4 to fit double barline.
+    const trebleY = 20;
+    const trebleStaff = new Stave(0, trebleY, width - 4); // Subtract 4 to fit double barline.
     trebleStaff.addClef('treble');
     trebleStaff.setEndBarType(Barline.type.END);
     trebleStaff.setContext(context).draw();
@@ -51,7 +52,7 @@ export default function CScaleTwoStaves() {
     const trebleBeams = Beam.generateBeams(trebleNotes);
 
     // Bass Clef.
-    const bassStaff = new Stave(0, 100, width - 4);
+    const bassStaff = new Stave(0, 100 + trebleY, width - 4);
     bassStaff.addClef('bass');
     bassStaff.setEndBarType(Barline.type.END);
     bassStaff.setContext(context).draw();
