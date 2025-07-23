@@ -22,7 +22,7 @@ export default function CScaleTwoStaves() {
     div.innerHTML = '';
   
     const renderer = new Renderer(div, Renderer.Backends.SVG);
-    renderer.resize(width, 220);
+    renderer.resize(width, 240);
     const context = renderer.getContext();
     context.setFont('Arial', 10, '').setBackgroundFillStyle('#fff');
   
