@@ -10,6 +10,7 @@ import {
   Formatter,
   Beam,
 } from 'vexflow';
+import { scaleTypes, getScaleNotes, accidentals } from '../utilities/noteConversions';
 
 export default function CScale() {
   const containerRef = useRef(null);

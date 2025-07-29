@@ -4,13 +4,43 @@ import DScale from '../components/DScale.jsx';
 import CScaleTwoStaves from '../components/CScaleTwoStaves.jsx';
 import CScaleTwoOctaves from '../components/CScaleTwoOctaves.jsx';
 import Layout from '../layouts/Layout.astro';
+import OneOctaveScale from '../components/OneOctaveScale';
+import { accidentals, scaleTypes } from '../utilities/noteConversions';
+import { accidentalChoice } from '../utilities/noteConversions';
 
 // Welcome to Astro! Wondering what to do next? Check out the Astro documentation at https://docs.astro.build
 // Don't want to use any of this? Delete everything in this file, the `assets`, `components`, and `layouts` directories, and start fresh.
 ---
 
-<Layout>
-	<CScale client:load />
+<Layout style="margin-bottom: 50vh;">
+	<OneOctaveScale
+		scaleKey={1}
+		scaleType={scaleTypes.MAJOR}
+		rightHand={true}
+		accidental={accidentals.PREFER_FLAT}
+		accidentalChoice={accidentalChoice.BOTH}
+		client:load />
+	<OneOctaveScale
+		scaleKey={1}
+		scaleType={scaleTypes.MAJOR}
+		rightHand={false}
+		accidental={accidentals.PREFER_FLAT}
+		accidentalChoice={accidentalChoice.BOTH}
+		client:load />
+	<OneOctaveScale
+		scaleKey={3}
+		scaleType={scaleTypes.MAJOR}
+		rightHand={true}
+		accidental={accidentals.NATURAL}
+		accidentalChoice={accidentalChoice.BOTH}
+		client:load />
+	<OneOctaveScale
+		scaleKey={3}
+		scaleType={scaleTypes.MAJOR}
+		rightHand={false}
+		accidental={accidentals.NATURAL}
+		accidentalChoice={accidentalChoice.BOTH}
+		client:load />
 	<CScaleTwoStaves client:load />
 	<CScaleTwoOctaves client:load />
 	<DScale client:load />
