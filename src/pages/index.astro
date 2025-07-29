@@ -5,6 +5,7 @@ import CScaleTwoStaves from '../components/CScaleTwoStaves.jsx';
 import CScaleTwoOctaves from '../components/CScaleTwoOctaves.jsx';
 import Layout from '../layouts/Layout.astro';
 import OneOctaveScale from '../components/OneOctaveScale';
+import OneOctaveScaleHT from "../components/OneOctaveScaleHT";
 import { accidentals, scaleTypes } from '../utilities/noteConversions';
 import { accidentalChoice } from '../utilities/noteConversions';
 
@@ -27,17 +28,9 @@ import { accidentalChoice } from '../utilities/noteConversions';
 		accidental={accidentals.PREFER_FLAT}
 		accidentalChoice={accidentalChoice.BOTH}
 		client:load />
-	<OneOctaveScale
+	<OneOctaveScaleHT
 		scaleKey={3}
 		scaleType={scaleTypes.MAJOR}
-		rightHand={true}
-		accidental={accidentals.NATURAL}
-		accidentalChoice={accidentalChoice.BOTH}
-		client:load />
-	<OneOctaveScale
-		scaleKey={3}
-		scaleType={scaleTypes.MAJOR}
-		rightHand={false}
 		accidental={accidentals.NATURAL}
 		accidentalChoice={accidentalChoice.BOTH}
 		client:load />
