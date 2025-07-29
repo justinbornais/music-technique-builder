@@ -54,8 +54,6 @@ export default function OneOctaveScale({ scaleKey, scaleType, rightHand, acciden
             sn.addModifier(new Accidental('b'), 0);
         return sn;
     });
-
-    console.log(notes);
   
     const voice = new Voice({ num_beats: notes.length + 1, beat_value: 8 });
     voice.addTickables(notes);
