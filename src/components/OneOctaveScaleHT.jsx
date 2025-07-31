@@ -6,11 +6,13 @@ import {
   Renderer,
   Stave,
   StaveNote,
+  StaveConnector,
   Voice,
   Formatter,
   Beam,
 } from 'vexflow';
 import { scaleTypes, getScaleNotes, accidentals, getKeySignatureLetter, noteName } from '../utilities/noteConversions';
+import { generateNotes } from '../utilities/scaleHelpers';
 
 export default function OneOctaveScaleHT({ scaleKey, scaleType, accidental, accidentalChoice }) {
   const containerRef = useRef(null);
@@ -28,7 +30,7 @@ export default function OneOctaveScaleHT({ scaleKey, scaleType, accidental, acci
     context.setFont('Arial', 10, '').setBackgroundFillStyle('#fff');
 
     // Right hand code.
-    const staveRH = new Stave(0, 0, width - 4);
+    const staveRH = new Stave(20, 0, width - 24);
     staveRH.addClef("treble");
     staveRH.setEndBarType(Barline.type.END);
     if (accidentalChoice !== accidentalChoice.ACCIDENTALS)
@@ -36,30 +38,14 @@ export default function OneOctaveScaleHT({ scaleKey, scaleType, accidental, acci
     staveRH.setContext(context).draw();
   
     const scaleNotesRH = getScaleNotes(parseInt(scaleKey), scaleType, true, 1, accidental, true, false);
-  
-    const notesRH = [...scaleNotesRH].map((n, i) => {
-        let duration = '8';
-        if ((i + 1) === scaleNotesRH.length)
-            duration = '4';
-        const sn = new StaveNote({ keys: [n.note], duration: duration, clef: "treble" });
-        const fingering = new Annotation(n.fingering[0])
-            .setFont("Arial", 12)
-            .setVerticalJustification(Annotation.VerticalJustify.TOP);
-        sn.addModifier(fingering, 0);
-
-        if (accidentalChoice !== accidentalChoice.ACCIDENTALS && n.note.includes('#'))
-            sn.addModifier(new Accidental('#'), 0);
-        if (accidentalChoice !== accidentalChoice.ACCIDENTALS && n.note.includes('b'))
-            sn.addModifier(new Accidental('b'), 0);
-        return sn;
-    });
+    const notesRH = generateNotes(scaleKey, scaleNotesRH, true, "8", accidentalChoice)
   
     const voiceRH = new Voice({ num_beats: notesRH.length + 1, beat_value: 8 });
     voiceRH.addTickables(notesRH);
     const beamsRH = Beam.generateBeams(notesRH);
 
     // Left hand code.
-    const staveLH = new Stave(0, 100, width - 4);
+    const staveLH = new Stave(20, 100, width - 24);
     staveLH.addClef("bass");
     staveLH.setEndBarType(Barline.type.END);
     if (accidentalChoice !== accidentalChoice.ACCIDENTALS)
@@ -67,23 +53,7 @@ export default function OneOctaveScaleHT({ scaleKey, scaleType, accidental, acci
     staveLH.setContext(context).draw();
   
     const scaleNotesLH = getScaleNotes(parseInt(scaleKey), scaleType, false, 1, accidental, true, false);
-  
-    const notesLH = [...scaleNotesLH].map((n, i) => {
-        let duration = '8';
-        if ((i + 1) === scaleNotesLH.length)
-            duration = '4';
-        const sn = new StaveNote({ keys: [n.note], duration: duration, clef: "bass" });
-        const fingering = new Annotation(n.fingering[0])
-            .setFont("Arial", 12)
-            .setVerticalJustification(Annotation.VerticalJustify.BOTTOM);
-        sn.addModifier(fingering, 0);
-
-        if (accidentalChoice !== accidentalChoice.ACCIDENTALS && n.note.includes('#'))
-            sn.addModifier(new Accidental('#'), 0);
-        if (accidentalChoice !== accidentalChoice.ACCIDENTALS && n.note.includes('b'))
-            sn.addModifier(new Accidental('b'), 0);
-        return sn;
-    });
+    const notesLH = generateNotes(scaleKey, scaleNotesLH, false, "8", accidentalChoice);
   
     const voiceLH = new Voice({ num_beats: notesLH.length + 1, beat_value: 8 });
     voiceLH.addTickables(notesLH);
@@ -98,6 +68,18 @@ export default function OneOctaveScaleHT({ scaleKey, scaleType, accidental, acci
     voiceLH.draw(context, staveLH);
     beamsRH.forEach(beam => beam.setContext(context).draw());
     beamsLH.forEach(beam => beam.setContext(context).draw());
+
+    const brace = new StaveConnector(staveRH, staveLH);
+    brace.setType(StaveConnector.type.BRACE);
+    brace.setContext(context).draw();
+
+    const lineLeft = new StaveConnector(staveRH, staveLH);
+    lineLeft.setType(StaveConnector.type.SINGLE_LEFT);
+    lineLeft.setContext(context).draw();
+
+    const lineRight = new StaveConnector(staveRH, staveLH);
+    lineRight.setType(StaveConnector.type.BOLD_DOUBLE_RIGHT);
+    lineRight.setContext(context).draw();
   }, []);
 
   return (
