@@ -68,17 +68,21 @@ export function getKeySignatureLetter(key, major, accidental = accidentals.NATUR
  * @param {*} scaleType The scale type.
  * @returns The scale object defined in `techniques.json` for the given key signature and scale type.
  */
-export function getScaleObject(key, scaleType) {
+export function getScaleObject(key, scaleType, seen = new Set()) {
     const scale = data.scales[scaleType];
     if (!scale) return null;
 
-    let scaleKey = scale[key];
-    if (!scaleKey.hasOwnProperty("RH")) {
-        let alias = scale.aliases[key];
-        if (!alias) return null;
-        if (!alias.length === 2) return null;
+    const scaleId = `${scaleType}:${key}`;
+    if (seen.has(scaleId)) return null;
+    seen.add(scaleId);
 
-        scaleKey = getScaleObject(alias[1], alias[0]);
+    let scaleKey = scale[key];
+    if (!scaleKey || !scaleKey.hasOwnProperty("RH")) {
+        let alias = scale.aliases?.[key];
+        if (!alias) return null;
+        if (alias.length !== 2) return null;
+
+        scaleKey = getScaleObject(alias[1], alias[0], seen);
     }
     return scaleKey;
 }
@@ -96,6 +100,7 @@ export function getScaleObject(key, scaleType) {
  */
 export function getScaleNotes(key, scaleType, rh, octaves, accidental = accidentals.NATURAL, keySignature = true, alternateFingerings = false, direction = scaleDirection.BOTH) {
     const scale = getScaleObject(key, scaleType);
+    if (!scale) return [];
     const pattern = data.scales[scaleType]["pattern"];
     let handArray = rh ? scale.RH : scale.LH;
     let notes = [];
