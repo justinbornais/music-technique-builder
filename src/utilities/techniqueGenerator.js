@@ -1330,6 +1330,16 @@ function sourceForEntry(entry) {
   return typstDocument(scoreCallForSettings(entry.settings, entry.title, subtitleForSettings(entry.settings)));
 }
 
+function stableIdForSource(source) {
+  let hash = 0;
+  for (let index = 0; index < source.length; index += 1) {
+    hash = Math.imul(31, hash) + source.charCodeAt(index);
+    hash |= 0;
+  }
+
+  return `score-${(hash >>> 0).toString(36)}`;
+}
+
 export function buildTechniqueDocument(settings) {
   const title = techniqueLabel(settings);
 
@@ -1340,11 +1350,14 @@ export function buildTechniqueDocument(settings) {
 }
 
 export function buildTechniqueCollectionDocument(collectionSettings) {
-  const entries = collectionEntriesForSettings(collectionSettings).map((entry, index) => ({
-    ...entry,
-    id: `${index}-${entry.title}`,
-    source: sourceForEntry(entry),
-  }));
+  const entries = collectionEntriesForSettings(collectionSettings).map((entry) => {
+    const source = sourceForEntry(entry);
+    return {
+      ...entry,
+      id: stableIdForSource(source),
+      source,
+    };
+  });
   const title = collectionSettings.title || DEFAULT_COLLECTION_SETTINGS.title;
   const body = entries.length === 0
     ? `#align(center)[#text(size: 18pt, weight: "bold")[${typstContent(title)}]]

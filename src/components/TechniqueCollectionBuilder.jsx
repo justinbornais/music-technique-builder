@@ -93,6 +93,7 @@ export default function TechniqueCollectionBuilder() {
   const [entryResults, setEntryResults] = useState([]);
   const [isRendering, setIsRendering] = useState(true);
   const renderId = useRef(0);
+  const resultCache = useRef(new Map());
 
   const document = useMemo(() => buildTechniqueCollectionDocument(settings), [settings]);
 
@@ -116,30 +117,49 @@ export default function TechniqueCollectionBuilder() {
   useEffect(() => {
     const id = renderId.current + 1;
     renderId.current = id;
-    setIsRendering(true);
-    setEntryResults(document.entries.map((entry) => ({
-      id: entry.id,
-      title: entry.title,
-      svg: '',
-      error: '',
-      status: 'pending',
-    })));
+
+    const visibleResults = document.entries.map((entry) => (
+      resultCache.current.get(entry.id) ?? {
+        id: entry.id,
+        title: entry.title,
+        svg: '',
+        error: '',
+        status: 'pending',
+      }
+    ));
+    const entriesToRender = document.entries.filter((entry) => !resultCache.current.has(entry.id));
+
+    setEntryResults(visibleResults);
+    setIsRendering(entriesToRender.length > 0);
 
     if (document.entries.length === 0) {
       setIsRendering(false);
       return undefined;
     }
 
+    if (entriesToRender.length === 0) {
+      return undefined;
+    }
+
     const abortController = new AbortController();
     const timer = window.setTimeout(async () => {
       try {
-        await renderTypstSvgBatch(document.entries, {
+        await renderTypstSvgBatch(entriesToRender, {
           signal: abortController.signal,
-          onResult: (index, result) => {
+          onResult: (_, result) => {
             if (renderId.current !== id) return;
 
-            setEntryResults((current) => current.map((entry, resultIndex) => (
-              resultIndex === index
+            const rendered = {
+              id: result.id,
+              title: result.title,
+              svg: result.svg,
+              error: result.error,
+              status: result.status,
+            };
+            resultCache.current.set(result.id, rendered);
+
+            setEntryResults((current) => current.map((entry) => (
+              entry.id === result.id
                 ? {
                   ...entry,
                   svg: result.svg,
@@ -158,12 +178,16 @@ export default function TechniqueCollectionBuilder() {
         if (nextError?.name === 'AbortError' || renderId.current !== id) return;
 
         setEntryResults((current) => current.map((entry) => (
-          entry.status === 'pending'
-            ? {
-              ...entry,
-              error: nextError instanceof Error ? nextError.message : String(nextError),
-              status: 'error',
-            }
+          entry.status === 'pending' && entriesToRender.some((nextEntry) => nextEntry.id === entry.id)
+            ? (() => {
+              const rendered = {
+                ...entry,
+                error: nextError instanceof Error ? nextError.message : String(nextError),
+                status: 'error',
+              };
+              resultCache.current.set(entry.id, rendered);
+              return rendered;
+            })()
             : entry
         )));
         setIsRendering(false);
