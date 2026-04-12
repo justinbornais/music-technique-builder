@@ -39,6 +39,11 @@ const renderModeOptions = [
   { value: RENDER_MODES.ACCIDENTALS, label: 'Accidentals' },
 ];
 
+const octaveOptions = [
+  { value: 1, label: '1 octave' },
+  { value: 2, label: '2 octaves' },
+];
+
 function SelectField({ id, label, value, options, onChange }) {
   return (
     <label className="field" htmlFor={id}>
@@ -50,22 +55,6 @@ function SelectField({ id, label, value, options, onChange }) {
           </option>
         ))}
       </select>
-    </label>
-  );
-}
-
-function NumberField({ id, label, value, min, max, onChange }) {
-  return (
-    <label className="field" htmlFor={id}>
-      <span>{label}</span>
-      <input
-        id={id}
-        type="number"
-        min={min}
-        max={max}
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
-      />
     </label>
   );
 }
@@ -138,8 +127,11 @@ export default function TechniqueBuilder() {
       <section className="workbench" aria-label="Technique builder">
         <div className="controls">
           <div className="brandline">
-            <p className="eyebrow">Technique Builder</p>
+            <p className="eyebrow">Single Technique</p>
             <h1>{document.title}</h1>
+            <a className="text-link" href="/">
+              Technique collection
+            </a>
           </div>
 
           <div className="control-grid">
@@ -221,14 +213,15 @@ export default function TechniqueBuilder() {
               options={renderModeOptions}
               onChange={(value) => updateSetting('renderMode', value)}
             />
-            <NumberField
-              id="octaves"
-              label="Octaves"
-              min={1}
-              max={4}
-              value={settings.octaves}
-              onChange={(value) => updateSetting('octaves', Math.min(4, Math.max(1, value)))}
-            />
+            {settings.technique === TECHNIQUE_TYPES.SCALE && (
+              <SelectField
+                id="octaves"
+                label="Octaves"
+                value={settings.octaves}
+                options={octaveOptions}
+                onChange={(value) => updateSetting('octaves', Number(value))}
+              />
+            )}
           </div>
 
           <div className="toggles">
