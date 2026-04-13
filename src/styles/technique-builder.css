@@ -229,7 +229,7 @@ h1 {
 
 .collection-output {
   display: grid;
-  gap: 18px;
+  gap: 4px;
 }
 
 .collection-heading {
@@ -243,7 +243,13 @@ h1 {
 }
 
 .collection-score {
-  min-height: 120px;
+  min-height: 0;
+  line-height: 0;
+}
+
+.collection-score .score-placeholder,
+.collection-score .inline-error {
+  line-height: 1.35;
 }
 
 .score-placeholder,

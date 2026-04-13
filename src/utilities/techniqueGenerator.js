@@ -115,6 +115,14 @@ export const DURATION_OPTIONS = [
   { value: 16, label: 'Sixteenth notes' },
 ];
 
+const DEFAULT_STAFF_SIZE_MM = 1.7;
+
+export const DISPLAY_SIZE_OPTIONS = [
+  { value: 1, label: 'Default', staffSizeMm: DEFAULT_STAFF_SIZE_MM },
+  { value: 1.25, label: '25% larger', staffSizeMm: DEFAULT_STAFF_SIZE_MM * 1.25 },
+  { value: 1.5, label: '50% larger', staffSizeMm: DEFAULT_STAFF_SIZE_MM * 1.5 },
+];
+
 // Fill this section with the finished fingering rules as you settle them.
 // The generator reads these values today, using conservative defaults so the
 // page continues to render while the full table is being authored.
@@ -186,6 +194,7 @@ export const DEFAULT_SETTINGS = {
   duration: 8,
   direction: DIRECTIONS.BOTH,
   renderMode: RENDER_MODES.KEY_SIGNATURE,
+  displayScale: 1,
   showFingerings: true,
 };
 
@@ -196,6 +205,7 @@ export const DEFAULT_COLLECTION_SETTINGS = {
   duration: 8,
   direction: DIRECTIONS.BOTH,
   renderMode: RENDER_MODES.KEY_SIGNATURE,
+  displayScale: 1,
   showFingerings: true,
   keyOrder: KEY_ORDERS.CHROMATIC,
   includeScales: true,
@@ -1136,6 +1146,10 @@ function subtitleForSettings(settings) {
   }`;
 }
 
+function staffSizeForSettings(settings) {
+  return getOption(DISPLAY_SIZE_OPTIONS, Number(settings.displayScale ?? 1)).staffSizeMm;
+}
+
 function stavesForSettings(settings) {
   const hands = settings.hand === HANDS.TOGETHER ? [HANDS.RIGHT, HANDS.LEFT] : [settings.hand];
 
@@ -1159,18 +1173,24 @@ function formatTypstStaves(staves) {
     .join(',\n');
 }
 
-function scoreCallForSettings(settings, title = techniqueLabel(settings), subtitle = subtitleForSettings(settings)) {
+function scoreCallForSettings(
+  settings,
+  title = techniqueLabel(settings),
+  subtitle = subtitleForSettings(settings),
+  options = {},
+) {
   const staves = stavesForSettings(settings);
   const key = keyForSettings(settings);
+  const systemSpacing = options.compact ? '2mm' : '9mm';
 
   return `#score(
   title: ${typstString(title)},
   subtitle: ${typstString(subtitle)},
   key: ${typstString(key)},
   staff-group: ${typstString(staves.length > 1 ? 'grand' : 'none')},
-  staff-size: 1.7mm,
+  staff-size: ${staffSizeForSettings(settings)}mm,
   staff-spacing: 9mm,
-  system-spacing: 9mm,
+  system-spacing: ${systemSpacing},
   width: 235mm,
   measure-numbers: "none",
   staves: (
@@ -1202,6 +1222,7 @@ function collectionBaseSettings(collectionSettings) {
     duration: collectionSettings.duration,
     direction: collectionSettings.direction,
     renderMode: collectionSettings.renderMode,
+    displayScale: collectionSettings.displayScale,
     showFingerings: collectionSettings.showFingerings,
   };
 }
@@ -1317,17 +1338,22 @@ export function collectionEntriesForSettings(collectionSettings) {
   return entries;
 }
 
-function typstDocument(body) {
+function typstDocument(body, options = {}) {
+  const margin = options.compact ? '(x: 7mm, y: 1mm)' : '7mm';
+
   return `#import "scorify/lib.typ": score
 
-#set page(width: 255mm, height: auto, margin: 7mm)
+#set page(width: 255mm, height: auto, margin: ${margin})
 #set text(size: 10pt)
 
 ${body}`;
 }
 
 function sourceForEntry(entry) {
-  return typstDocument(scoreCallForSettings(entry.settings, entry.title, subtitleForSettings(entry.settings)));
+  return typstDocument(
+    scoreCallForSettings(entry.settings, entry.title, subtitleForSettings(entry.settings), { compact: true }),
+    { compact: true },
+  );
 }
 
 function stableIdForSource(source) {
@@ -1368,8 +1394,13 @@ export function buildTechniqueCollectionDocument(collectionSettings) {
 #v(5mm)
 
 ${entries
-    .map((entry) => scoreCallForSettings(entry.settings, entry.title, subtitleForSettings(entry.settings)))
-    .join('\n\n#v(7mm)\n\n')}`;
+    .map((entry) => scoreCallForSettings(
+      entry.settings,
+      entry.title,
+      subtitleForSettings(entry.settings),
+      { compact: true },
+    ))
+    .join('\n\n#v(2mm)\n\n')}`;
 
   return {
     title,

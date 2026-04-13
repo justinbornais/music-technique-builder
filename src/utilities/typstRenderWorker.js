@@ -11,7 +11,14 @@ const scorifySources = import.meta.glob('../typst/scorify/**/*.{typ,json}', {
 });
 
 let typstReady;
-let renderCount = 0;
+
+const MAIN_FILE_PATH = '/worker-technique.typ';
+const SVG_DATA_SELECTION = {
+  body: true,
+  defs: true,
+  css: true,
+  js: false,
+};
 
 function scorifyVirtualPath(path) {
   return path.replace(/^\.\.\/typst\/scorify\//, '/scorify/');
@@ -43,13 +50,13 @@ async function initializeTypst() {
 async function renderTypstSvg(source) {
   await initializeTypst();
 
-  const mainFilePath = `/worker-technique-${renderCount}.typ`;
-  renderCount += 1;
-  await $typst.addSource(mainFilePath, source);
+  await $typst.addSource(MAIN_FILE_PATH, source);
 
   const svg = await $typst.svg({
-    mainFilePath,
+    mainFilePath: MAIN_FILE_PATH,
     root: '/',
+    inputs: {},
+    data_selection: SVG_DATA_SELECTION,
   });
 
   if (!svg) {
@@ -60,9 +67,15 @@ async function renderTypstSvg(source) {
 }
 
 self.onmessage = async (event) => {
-  const { requestId, source } = event.data;
+  const { requestId, source, type } = event.data;
 
   try {
+    if (type === 'warmup') {
+      await initializeTypst();
+      self.postMessage({ requestId, ready: true });
+      return;
+    }
+
     const svg = await renderTypstSvg(source);
     self.postMessage({ requestId, svg });
   } catch (error) {

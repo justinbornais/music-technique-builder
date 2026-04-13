@@ -3,6 +3,7 @@ import {
   ARPEGGIO_OPTIONS,
   DEFAULT_SETTINGS,
   DIRECTIONS,
+  DISPLAY_SIZE_OPTIONS,
   DURATION_OPTIONS,
   HANDS,
   RENDER_MODES,
@@ -13,7 +14,7 @@ import {
   buildTechniqueDocument,
   getKeyOptionsForSettings,
 } from '../utilities/techniqueGenerator.js';
-import { renderTypstSvg } from '../utilities/typstRenderer.js';
+import { renderTypstSvg, warmTypstRenderer } from '../utilities/typstRenderer.js';
 
 const techniqueOptions = [
   { value: TECHNIQUE_TYPES.SCALE, label: 'Scales' },
@@ -92,6 +93,10 @@ export default function TechniqueBuilder() {
       [key]: value,
     }));
   }
+
+  useEffect(() => {
+    void warmTypstRenderer();
+  }, []);
 
   useEffect(() => {
     if (keyOptions.some((option) => option.value === settings.key)) return;
@@ -212,6 +217,13 @@ export default function TechniqueBuilder() {
               value={settings.renderMode}
               options={renderModeOptions}
               onChange={(value) => updateSetting('renderMode', value)}
+            />
+            <SelectField
+              id="displayScale"
+              label="Display size"
+              value={settings.displayScale}
+              options={DISPLAY_SIZE_OPTIONS}
+              onChange={(value) => updateSetting('displayScale', Number(value))}
             />
             {settings.technique === TECHNIQUE_TYPES.SCALE && (
               <SelectField

@@ -4,13 +4,14 @@ import {
   CHORD_PRESENTATION,
   DEFAULT_COLLECTION_SETTINGS,
   DIRECTIONS,
+  DISPLAY_SIZE_OPTIONS,
   DURATION_OPTIONS,
   HANDS,
   KEY_ORDERS,
   RENDER_MODES,
   buildTechniqueCollectionDocument,
 } from '../utilities/techniqueGenerator.js';
-import { renderTypstSvgBatch } from '../utilities/typstRenderer.js';
+import { renderTypstSvgBatch, warmTypstRenderer } from '../utilities/typstRenderer.js';
 
 const handOptions = [
   { value: HANDS.RIGHT, label: 'Right Hand' },
@@ -113,6 +114,10 @@ export default function TechniqueCollectionBuilder() {
     link.click();
     window.URL.revokeObjectURL(url);
   }
+
+  useEffect(() => {
+    void warmTypstRenderer({ main: false, workers: true });
+  }, []);
 
   useEffect(() => {
     const id = renderId.current + 1;
@@ -255,6 +260,13 @@ export default function TechniqueCollectionBuilder() {
               value={settings.renderMode}
               options={renderModeOptions}
               onChange={(value) => updateSetting('renderMode', value)}
+            />
+            <SelectField
+              id="displayScale"
+              label="Display size"
+              value={settings.displayScale}
+              options={DISPLAY_SIZE_OPTIONS}
+              onChange={(value) => updateSetting('displayScale', Number(value))}
             />
             {settings.includeScales && (
               <SelectField

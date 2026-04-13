@@ -12,9 +12,18 @@ const scorifySources = import.meta.glob('../typst/scorify/**/*.{typ,json}', {
 });
 
 let typstReady;
-let renderCount = 0;
 const svgCache = new Map();
 const renderWorkers = [];
+let renderQueue = Promise.resolve();
+
+const MAIN_FILE_PATH = '/technique.typ';
+const MAX_SVG_CACHE_ENTRIES = 250;
+const SVG_DATA_SELECTION = {
+  body: true,
+  defs: true,
+  css: true,
+  js: false,
+};
 
 function scorifyVirtualPath(path) {
   return path.replace(/^\.\.\/typst\/scorify\//, '/scorify/');
@@ -43,21 +52,36 @@ async function initializeTypst() {
   return typstReady;
 }
 
-export async function renderTypstSvg(source, options = {}) {
-  const { cache = true } = options;
+function cacheSvg(source, svg) {
+  if (svgCache.has(source)) {
+    svgCache.delete(source);
+  }
+
+  svgCache.set(source, svg);
+  if (svgCache.size > MAX_SVG_CACHE_ENTRIES) {
+    svgCache.delete(svgCache.keys().next().value);
+  }
+}
+
+function enqueueRender(task) {
+  const next = renderQueue.then(task, task);
+  renderQueue = next.catch(() => {});
+  return next;
+}
+
+async function renderWithMainCompiler(source, cache) {
   if (cache && svgCache.has(source)) {
     return svgCache.get(source);
   }
 
   await initializeTypst();
-
-  const mainFilePath = `/technique-${renderCount}.typ`;
-  renderCount += 1;
-  await $typst.addSource(mainFilePath, source);
+  await $typst.addSource(MAIN_FILE_PATH, source);
 
   const svg = await $typst.svg({
-    mainFilePath,
+    mainFilePath: MAIN_FILE_PATH,
     root: '/',
+    inputs: {},
+    data_selection: SVG_DATA_SELECTION,
   });
 
   if (!svg) {
@@ -65,10 +89,61 @@ export async function renderTypstSvg(source, options = {}) {
   }
 
   if (cache) {
-    svgCache.set(source, svg);
+    cacheSvg(source, svg);
   }
 
   return svg;
+}
+
+export async function renderTypstSvg(source, options = {}) {
+  const { cache = true } = options;
+  if (cache && svgCache.has(source)) {
+    return svgCache.get(source);
+  }
+
+  return enqueueRender(() => renderWithMainCompiler(source, cache));
+}
+
+function warmRenderWorker(worker) {
+  if (worker.warmupPromise) return worker.warmupPromise;
+
+  worker.warmupPromise = new Promise((resolve) => {
+    const requestId = `warmup-${Date.now()}-${Math.random()}`;
+    const timeout = window.setTimeout(cleanup, 8000);
+
+    function cleanup() {
+      window.clearTimeout(timeout);
+      worker.removeEventListener('message', handleMessage);
+      worker.removeEventListener('error', cleanup);
+      resolve();
+    }
+
+    function handleMessage(event) {
+      if (event.data?.requestId === requestId) {
+        cleanup();
+      }
+    }
+
+    worker.addEventListener('message', handleMessage);
+    worker.addEventListener('error', cleanup, { once: true });
+    worker.postMessage({ type: 'warmup', requestId });
+  });
+
+  return worker.warmupPromise;
+}
+
+export function warmTypstRenderer(options = {}) {
+  const { main = true, workers = 0 } = options;
+  const warmups = main ? [initializeTypst()] : [];
+
+  if (typeof Worker !== 'undefined' && workers) {
+    const workerCount = workers === true ? preferredWorkerCount(8) : workers;
+    for (let index = 0; index < workerCount; index += 1) {
+      warmups.push(warmRenderWorker(getRenderWorker(index)));
+    }
+  }
+
+  return Promise.allSettled(warmups);
 }
 
 function preferredWorkerCount(taskCount) {
@@ -213,12 +288,12 @@ export async function renderTypstSvgBatch(tasks, options = {}) {
     tasks.forEach((task, index) => {
       const cached = svgCache.get(task.source);
       if (cached) {
-        queueMicrotask(() => complete(index, {
+        complete(index, {
           ...task,
           svg: cached,
           error: '',
           status: 'complete',
-        }));
+        });
       } else {
         queue.push({ index, task });
       }
@@ -240,7 +315,7 @@ export async function renderTypstSvgBatch(tasks, options = {}) {
         worker.currentRequestId = null;
 
         if (svg) {
-          svgCache.set(job.task.source, svg);
+          cacheSvg(job.task.source, svg);
         }
 
         complete(job.index, {
