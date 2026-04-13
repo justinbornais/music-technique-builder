@@ -890,21 +890,42 @@ function arpeggioFingeringForKey(option, hand, settings) {
   return fallbackArpeggioFingering(option, hand);
 }
 
+// For melodic minor, ascending uses raised 6th and 7th; descending reverts to natural minor.
+function getScaleNotesForSettings(settings, keyOption, hand, spelling, useKeySignature) {
+  const isRightHand = hand === HANDS.RIGHT;
+  const octaves = effectiveOctaves(settings);
+
+  if (settings.scaleType === scaleTypes.MINOR_M && settings.direction !== DIRECTIONS.UP) {
+    if (settings.direction === DIRECTIONS.DOWN) {
+      return getScaleNotes(
+        keyOption.index, scaleTypes.MINOR_N, isRightHand,
+        octaves, spelling, useKeySignature, false, scaleDirection.DESCENDING,
+      );
+    }
+    // BOTH: ascending melodic minor, then descending natural minor
+    const ascNotes = getScaleNotes(
+      keyOption.index, scaleTypes.MINOR_M, isRightHand,
+      octaves, spelling, useKeySignature, false, scaleDirection.ASCENDING,
+    );
+    const descNotes = getScaleNotes(
+      keyOption.index, scaleTypes.MINOR_N, isRightHand,
+      octaves, spelling, useKeySignature, false, scaleDirection.DESCENDING,
+    );
+    return [...ascNotes, ...descNotes.slice(1)];
+  }
+
+  return getScaleNotes(
+    keyOption.index, settings.scaleType, isRightHand,
+    octaves, spelling, useKeySignature, false, getScaleDirection(settings.direction),
+  );
+}
+
 function scaleMusicForHand(settings, hand) {
   const handConfig = HAND_CONFIG[hand];
   const keyOption = selectedKeyOption(settings);
   const spelling = selectedSpelling(settings);
   const useKeySignature = shouldUseKeySignature(settings);
-  const notes = getScaleNotes(
-    keyOption.index,
-    settings.scaleType,
-    hand === HANDS.RIGHT,
-    effectiveOctaves(settings),
-    spelling,
-    shouldUseKeySignature(settings),
-    false,
-    getScaleDirection(settings.direction),
-  );
+  const notes = getScaleNotesForSettings(settings, keyOption, hand, spelling, useKeySignature);
 
   const context = {
     ...handConfig,
@@ -1244,14 +1265,34 @@ function addCollectionEntriesForKeys(entries, collectionSettings, settingsTempla
 
 function addScaleEntries(entries, collectionSettings) {
   const base = collectionBaseSettings(collectionSettings);
-  SCALE_OPTIONS.forEach((scaleOption) => {
-    const template = {
-      ...base,
-      technique: TECHNIQUE_TYPES.SCALE,
-      scaleType: scaleOption.value,
-    };
-    addCollectionEntriesForKeys(entries, collectionSettings, template);
-  });
+
+  if (collectionSettings.keyOrder === KEY_ORDERS.CHROMATIC) {
+    // Group by root: for each key in chromatic order, add all applicable scale types together
+    // (C major + C natural/harmonic/melodic minor, then C#/Db major + C# minor, etc.)
+    KEY_OPTIONS.forEach((keyOption) => {
+      SCALE_OPTIONS.forEach((scaleOption) => {
+        const minor = isMinorScale(scaleOption.value);
+        if (minor && !keyOption.minorKey) return;
+        if (!minor && !keyOption.majorKey) return;
+        const settings = {
+          ...base,
+          technique: TECHNIQUE_TYPES.SCALE,
+          scaleType: scaleOption.value,
+          key: keyOption.value,
+        };
+        entries.push({ settings, title: techniqueLabel(settings) });
+      });
+    });
+  } else {
+    SCALE_OPTIONS.forEach((scaleOption) => {
+      const template = {
+        ...base,
+        technique: TECHNIQUE_TYPES.SCALE,
+        scaleType: scaleOption.value,
+      };
+      addCollectionEntriesForKeys(entries, collectionSettings, template);
+    });
+  }
 }
 
 function addTriadEntries(entries, collectionSettings) {

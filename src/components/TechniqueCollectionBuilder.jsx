@@ -90,22 +90,34 @@ function ToggleField({ id, label, checked, onChange }) {
 }
 
 export default function TechniqueCollectionBuilder() {
-  const [settings, setSettings] = useState(DEFAULT_COLLECTION_SETTINGS);
+  const [pendingSettings, setPendingSettings] = useState(DEFAULT_COLLECTION_SETTINGS);
+  const [committedSettings, setCommittedSettings] = useState(null);
+  const [hasPendingChanges, setHasPendingChanges] = useState(true);
   const [entryResults, setEntryResults] = useState([]);
-  const [isRendering, setIsRendering] = useState(true);
+  const [isRendering, setIsRendering] = useState(false);
   const renderId = useRef(0);
   const resultCache = useRef(new Map());
 
-  const document = useMemo(() => buildTechniqueCollectionDocument(settings), [settings]);
+  const document = useMemo(
+    () => committedSettings ? buildTechniqueCollectionDocument(committedSettings) : null,
+    [committedSettings],
+  );
 
   function updateSetting(key, value) {
-    setSettings((current) => ({
+    setPendingSettings((current) => ({
       ...current,
       [key]: value,
     }));
+    setHasPendingChanges(true);
+  }
+
+  function handleGenerate() {
+    setCommittedSettings(pendingSettings);
+    setHasPendingChanges(false);
   }
 
   function exportTypst() {
+    if (!document) return;
     const blob = new Blob([document.source], { type: 'text/plain;charset=utf-8' });
     const url = window.URL.createObjectURL(blob);
     const link = window.document.createElement('a');
@@ -120,6 +132,12 @@ export default function TechniqueCollectionBuilder() {
   }, []);
 
   useEffect(() => {
+    if (!document) {
+      setEntryResults([]);
+      setIsRendering(false);
+      return undefined;
+    }
+
     const id = renderId.current + 1;
     renderId.current = id;
 
@@ -206,7 +224,7 @@ export default function TechniqueCollectionBuilder() {
       window.clearTimeout(timer);
       abortController.abort();
     };
-  }, [document.renderEntries]);
+  }, [document]);
 
   const completedCount = entryResults.reduce(
     (count, entry) => count + (entry.status === 'pending' ? 0 : entry.techniqueCount ?? 1),
@@ -219,7 +237,7 @@ export default function TechniqueCollectionBuilder() {
         <div className="controls">
           <div className="brandline">
             <p className="eyebrow">Technique Collection Generator</p>
-            <h1>{document.title}</h1>
+            <h1>{committedSettings ? document.title : (pendingSettings.title || DEFAULT_COLLECTION_SETTINGS.title)}</h1>
             <a className="text-link" href="/single-technique">
               Single technique
             </a>
@@ -229,56 +247,56 @@ export default function TechniqueCollectionBuilder() {
             <TextField
               id="collectionTitle"
               label="Title"
-              value={settings.title}
+              value={pendingSettings.title}
               onChange={(value) => updateSetting('title', value)}
             />
             <SelectField
               id="keyOrder"
               label="Key order"
-              value={settings.keyOrder}
+              value={pendingSettings.keyOrder}
               options={keyOrderOptions}
               onChange={(value) => updateSetting('keyOrder', value)}
             />
             <SelectField
               id="hand"
               label="Hand"
-              value={settings.hand}
+              value={pendingSettings.hand}
               options={handOptions}
               onChange={(value) => updateSetting('hand', value)}
             />
             <SelectField
               id="direction"
               label="Direction"
-              value={settings.direction}
+              value={pendingSettings.direction}
               options={directionOptions}
               onChange={(value) => updateSetting('direction', value)}
             />
             <SelectField
               id="duration"
               label="Duration"
-              value={settings.duration}
+              value={pendingSettings.duration}
               options={DURATION_OPTIONS}
               onChange={(value) => updateSetting('duration', Number(value))}
             />
             <SelectField
               id="renderMode"
               label="Notation"
-              value={settings.renderMode}
+              value={pendingSettings.renderMode}
               options={renderModeOptions}
               onChange={(value) => updateSetting('renderMode', value)}
             />
             <SelectField
               id="displayScale"
               label="Display size"
-              value={settings.displayScale}
+              value={pendingSettings.displayScale}
               options={DISPLAY_SIZE_OPTIONS}
               onChange={(value) => updateSetting('displayScale', Number(value))}
             />
-            {settings.includeScales && (
+            {pendingSettings.includeScales && (
               <SelectField
                 id="octaves"
                 label="Scale octaves"
-                value={settings.octaves}
+                value={pendingSettings.octaves}
                 options={octaveOptions}
                 onChange={(value) => updateSetting('octaves', Number(value))}
               />
@@ -289,59 +307,59 @@ export default function TechniqueCollectionBuilder() {
             <ToggleField
               id="includeScales"
               label="Scales"
-              checked={settings.includeScales}
+              checked={pendingSettings.includeScales}
               onChange={(value) => updateSetting('includeScales', value)}
             />
             <ToggleField
               id="includeTriads"
               label="Triads"
-              checked={settings.includeTriads}
+              checked={pendingSettings.includeTriads}
               onChange={(value) => updateSetting('includeTriads', value)}
             />
             <ToggleField
               id="includeSevenths"
               label="7th chords"
-              checked={settings.includeSevenths}
+              checked={pendingSettings.includeSevenths}
               onChange={(value) => updateSetting('includeSevenths', value)}
             />
             <ToggleField
               id="includeArpeggios"
               label="Arpeggios"
-              checked={settings.includeArpeggios}
+              checked={pendingSettings.includeArpeggios}
               onChange={(value) => updateSetting('includeArpeggios', value)}
             />
             <ToggleField
               id="fingerings"
               label="Fingerings"
-              checked={settings.showFingerings}
+              checked={pendingSettings.showFingerings}
               onChange={(value) => updateSetting('showFingerings', value)}
             />
           </div>
 
           <div className="control-grid compact-grid">
-            {settings.includeTriads && (
+            {pendingSettings.includeTriads && (
               <SelectField
                 id="triadPresentation"
                 label="Triads"
-                value={settings.triadPresentation}
+                value={pendingSettings.triadPresentation}
                 options={chordPresentationOptions}
                 onChange={(value) => updateSetting('triadPresentation', value)}
               />
             )}
-            {settings.includeSevenths && (
+            {pendingSettings.includeSevenths && (
               <SelectField
                 id="seventhPresentation"
                 label="7th chords"
-                value={settings.seventhPresentation}
+                value={pendingSettings.seventhPresentation}
                 options={chordPresentationOptions}
                 onChange={(value) => updateSetting('seventhPresentation', value)}
               />
             )}
-            {settings.includeArpeggios && (
+            {pendingSettings.includeArpeggios && (
               <SelectField
                 id="arpeggioPresentation"
                 label="Arpeggios"
-                value={settings.arpeggioPresentation}
+                value={pendingSettings.arpeggioPresentation}
                 options={arpeggioPresentationOptions}
                 onChange={(value) => updateSetting('arpeggioPresentation', value)}
               />
@@ -349,11 +367,14 @@ export default function TechniqueCollectionBuilder() {
           </div>
 
           <div className="action-row">
-            <button type="button" onClick={() => window.print()} disabled={isRendering}>
+            <button type="button" onClick={() => window.print()} disabled={isRendering || !committedSettings}>
               Print
             </button>
-            <button type="button" onClick={exportTypst}>
+            <button type="button" onClick={exportTypst} disabled={!committedSettings}>
               Export Typst
+            </button>
+            <button type="button" onClick={handleGenerate} disabled={!hasPendingChanges}>
+              {committedSettings === null ? 'Generate' : 'Regenerate'}
             </button>
           </div>
         </div>
@@ -362,34 +383,42 @@ export default function TechniqueCollectionBuilder() {
           <div className="score-toolbar">
             <span>
               {isRendering
-                ? `Rendering ${completedCount}/${document.entries.length}`
-                : `${document.entries.length} techniques`}
+                ? `Rendering ${completedCount}/${document?.entries.length ?? 0}`
+                : committedSettings
+                  ? `${document.entries.length} techniques`
+                  : 'Not generated'}
             </span>
             <span>Scorify + Typst WASM</span>
           </div>
-          <div className={`score-output collection-output${isRendering ? ' is-rendering' : ''}`}>
-            {document.entries.length === 0 && (
-              <p className="empty-output">Choose at least one technique family.</p>
-            )}
-            {document.entries.length > 0 && (
-              <div className="collection-heading">
-                <h2>{document.title}</h2>
-              </div>
-            )}
-            {entryResults.map((entry) => (
-              <section className="collection-score" key={entry.id} aria-label={entry.title}>
-                {entry.status === 'pending' && (
-                  <div className="score-placeholder">Rendering {entry.title}</div>
-                )}
-                {entry.error && (
-                  <pre className="error-output inline-error">{entry.error}</pre>
-                )}
-                {entry.svg && (
-                  <div dangerouslySetInnerHTML={{ __html: entry.svg }} />
-                )}
-              </section>
-            ))}
-          </div>
+          {!committedSettings ? (
+            <div className="score-output collection-output">
+              <p className="empty-output">Configure your settings and click Generate.</p>
+            </div>
+          ) : (
+            <div className={`score-output collection-output${isRendering ? ' is-rendering' : ''}`}>
+              {document.entries.length === 0 && (
+                <p className="empty-output">Choose at least one technique family.</p>
+              )}
+              {document.entries.length > 0 && (
+                <div className="collection-heading">
+                  <h2>{document.title}</h2>
+                </div>
+              )}
+              {entryResults.map((entry) => (
+                <section className="collection-score" key={entry.id} aria-label={entry.title}>
+                  {entry.status === 'pending' && (
+                    <div className="score-placeholder">Rendering {entry.title}</div>
+                  )}
+                  {entry.error && (
+                    <pre className="error-output inline-error">{entry.error}</pre>
+                  )}
+                  {entry.svg && (
+                    <div dangerouslySetInnerHTML={{ __html: entry.svg }} />
+                  )}
+                </section>
+              ))}
+            </div>
+          )}
         </div>
       </section>
     </main>

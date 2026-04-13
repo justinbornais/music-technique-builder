@@ -75,23 +75,34 @@ function ToggleField({ id, label, checked, onChange }) {
 }
 
 export default function TechniqueBuilder() {
-  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [pendingSettings, setPendingSettings] = useState(DEFAULT_SETTINGS);
+  const [committedSettings, setCommittedSettings] = useState(null);
+  const [hasPendingChanges, setHasPendingChanges] = useState(true);
   const [svg, setSvg] = useState('');
   const [error, setError] = useState('');
-  const [isRendering, setIsRendering] = useState(true);
+  const [isRendering, setIsRendering] = useState(false);
   const renderId = useRef(0);
 
-  const keyOptions = useMemo(() => getKeyOptionsForSettings(settings), [
-    settings.technique,
-    settings.scaleType,
+  const keyOptions = useMemo(() => getKeyOptionsForSettings(pendingSettings), [
+    pendingSettings.technique,
+    pendingSettings.scaleType,
   ]);
-  const document = useMemo(() => buildTechniqueDocument(settings), [settings]);
+  const document = useMemo(
+    () => committedSettings ? buildTechniqueDocument(committedSettings) : null,
+    [committedSettings],
+  );
 
   function updateSetting(key, value) {
-    setSettings((current) => ({
+    setPendingSettings((current) => ({
       ...current,
       [key]: value,
     }));
+    setHasPendingChanges(true);
+  }
+
+  function handleGenerate() {
+    setCommittedSettings(pendingSettings);
+    setHasPendingChanges(false);
   }
 
   useEffect(() => {
@@ -99,11 +110,13 @@ export default function TechniqueBuilder() {
   }, []);
 
   useEffect(() => {
-    if (keyOptions.some((option) => option.value === settings.key)) return;
+    if (keyOptions.some((option) => option.value === pendingSettings.key)) return;
     updateSetting('key', keyOptions[0]?.value ?? DEFAULT_SETTINGS.key);
-  }, [keyOptions, settings.key]);
+  }, [keyOptions, pendingSettings.key]);
 
   useEffect(() => {
+    if (!document) return;
+
     const id = renderId.current + 1;
     renderId.current = id;
     setIsRendering(true);
@@ -125,7 +138,7 @@ export default function TechniqueBuilder() {
     }, 120);
 
     return () => window.clearTimeout(timer);
-  }, [document.source]);
+  }, [document]);
 
   return (
     <main className="technique-shell">
@@ -133,7 +146,7 @@ export default function TechniqueBuilder() {
         <div className="controls">
           <div className="brandline">
             <p className="eyebrow">Single Technique</p>
-            <h1>{document.title}</h1>
+            <h1>{document?.title ?? 'Technique Builder'}</h1>
             <a className="text-link" href="/">
               Technique collection
             </a>
@@ -143,49 +156,49 @@ export default function TechniqueBuilder() {
             <SelectField
               id="technique"
               label="Technique"
-              value={settings.technique}
+              value={pendingSettings.technique}
               options={techniqueOptions}
               onChange={(value) => updateSetting('technique', value)}
             />
             <SelectField
               id="key"
               label="Key"
-              value={settings.key}
+              value={pendingSettings.key}
               options={keyOptions}
               onChange={(value) => updateSetting('key', value)}
             />
-            {settings.technique === TECHNIQUE_TYPES.SCALE && (
+            {pendingSettings.technique === TECHNIQUE_TYPES.SCALE && (
               <SelectField
                 id="scaleType"
                 label="Scale"
-                value={settings.scaleType}
+                value={pendingSettings.scaleType}
                 options={SCALE_OPTIONS}
                 onChange={(value) => updateSetting('scaleType', value)}
               />
             )}
-            {settings.technique === TECHNIQUE_TYPES.TRIAD && (
+            {pendingSettings.technique === TECHNIQUE_TYPES.TRIAD && (
               <SelectField
                 id="triadQuality"
                 label="Triad"
-                value={settings.triadQuality}
+                value={pendingSettings.triadQuality}
                 options={TRIAD_OPTIONS}
                 onChange={(value) => updateSetting('triadQuality', value)}
               />
             )}
-            {settings.technique === TECHNIQUE_TYPES.SEVENTH && (
+            {pendingSettings.technique === TECHNIQUE_TYPES.SEVENTH && (
               <SelectField
                 id="seventhQuality"
                 label="7th Chord"
-                value={settings.seventhQuality}
+                value={pendingSettings.seventhQuality}
                 options={SEVENTH_OPTIONS}
                 onChange={(value) => updateSetting('seventhQuality', value)}
               />
             )}
-            {settings.technique === TECHNIQUE_TYPES.ARPEGGIO && (
+            {pendingSettings.technique === TECHNIQUE_TYPES.ARPEGGIO && (
               <SelectField
                 id="arpeggioQuality"
                 label="Arpeggio"
-                value={settings.arpeggioQuality}
+                value={pendingSettings.arpeggioQuality}
                 options={ARPEGGIO_OPTIONS}
                 onChange={(value) => updateSetting('arpeggioQuality', value)}
               />
@@ -193,43 +206,43 @@ export default function TechniqueBuilder() {
             <SelectField
               id="hand"
               label="Hand"
-              value={settings.hand}
+              value={pendingSettings.hand}
               options={handOptions}
               onChange={(value) => updateSetting('hand', value)}
             />
             <SelectField
               id="direction"
               label="Direction"
-              value={settings.direction}
+              value={pendingSettings.direction}
               options={directionOptions}
               onChange={(value) => updateSetting('direction', value)}
             />
             <SelectField
               id="duration"
               label="Duration"
-              value={settings.duration}
+              value={pendingSettings.duration}
               options={DURATION_OPTIONS}
               onChange={(value) => updateSetting('duration', Number(value))}
             />
             <SelectField
               id="renderMode"
               label="Notation"
-              value={settings.renderMode}
+              value={pendingSettings.renderMode}
               options={renderModeOptions}
               onChange={(value) => updateSetting('renderMode', value)}
             />
             <SelectField
               id="displayScale"
               label="Display size"
-              value={settings.displayScale}
+              value={pendingSettings.displayScale}
               options={DISPLAY_SIZE_OPTIONS}
               onChange={(value) => updateSetting('displayScale', Number(value))}
             />
-            {settings.technique === TECHNIQUE_TYPES.SCALE && (
+            {pendingSettings.technique === TECHNIQUE_TYPES.SCALE && (
               <SelectField
                 id="octaves"
                 label="Octaves"
-                value={settings.octaves}
+                value={pendingSettings.octaves}
                 options={octaveOptions}
                 onChange={(value) => updateSetting('octaves', Number(value))}
               />
@@ -240,21 +253,36 @@ export default function TechniqueBuilder() {
             <ToggleField
               id="fingerings"
               label="Fingerings"
-              checked={settings.showFingerings}
+              checked={pendingSettings.showFingerings}
               onChange={(value) => updateSetting('showFingerings', value)}
             />
+          </div>
+
+          <div className="action-row">
+            <button
+              type="button"
+              onClick={handleGenerate}
+              disabled={!hasPendingChanges}
+            >
+              {committedSettings === null ? 'Generate' : 'Regenerate'}
+            </button>
           </div>
         </div>
 
         <div className="score-pane" aria-live="polite">
           <div className="score-toolbar">
-            <span>{isRendering ? 'Rendering with Typst' : 'Ready'}</span>
+            <span>{committedSettings === null ? 'Not generated' : isRendering ? 'Rendering with Typst' : 'Ready'}</span>
             <span>Scorify + Typst WASM</span>
           </div>
-          {error && (
+          {committedSettings === null && (
+            <div className="score-output">
+              <div className="score-placeholder">Configure your settings and click Generate.</div>
+            </div>
+          )}
+          {committedSettings !== null && error && (
             <pre className="error-output">{error}</pre>
           )}
-          {!error && (
+          {committedSettings !== null && !error && (
             <div
               className={`score-output${isRendering ? ' is-rendering' : ''}`}
               dangerouslySetInnerHTML={{ __html: svg }}
