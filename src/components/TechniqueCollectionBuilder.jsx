@@ -123,16 +123,17 @@ export default function TechniqueCollectionBuilder() {
     const id = renderId.current + 1;
     renderId.current = id;
 
-    const visibleResults = document.entries.map((entry) => (
+    const visibleResults = document.renderEntries.map((entry) => (
       resultCache.current.get(entry.id) ?? {
         id: entry.id,
         title: entry.title,
+        techniqueCount: entry.techniqueCount,
         svg: '',
         error: '',
         status: 'pending',
       }
     ));
-    const entriesToRender = document.entries.filter((entry) => !resultCache.current.has(entry.id));
+    const entriesToRender = document.renderEntries.filter((entry) => !resultCache.current.has(entry.id));
 
     setEntryResults(visibleResults);
     setIsRendering(entriesToRender.length > 0);
@@ -157,6 +158,7 @@ export default function TechniqueCollectionBuilder() {
             const rendered = {
               id: result.id,
               title: result.title,
+              techniqueCount: result.techniqueCount,
               svg: result.svg,
               error: result.error,
               status: result.status,
@@ -167,6 +169,7 @@ export default function TechniqueCollectionBuilder() {
               entry.id === result.id
                 ? {
                   ...entry,
+                  techniqueCount: result.techniqueCount,
                   svg: result.svg,
                   error: result.error,
                   status: result.status,
@@ -203,9 +206,12 @@ export default function TechniqueCollectionBuilder() {
       window.clearTimeout(timer);
       abortController.abort();
     };
-  }, [document.entries]);
+  }, [document.renderEntries]);
 
-  const completedCount = entryResults.filter((entry) => entry.status !== 'pending').length;
+  const completedCount = entryResults.reduce(
+    (count, entry) => count + (entry.status === 'pending' ? 0 : entry.techniqueCount ?? 1),
+    0,
+  );
 
   return (
     <main className="technique-shell">

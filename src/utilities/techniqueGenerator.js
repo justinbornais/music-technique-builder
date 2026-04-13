@@ -116,6 +116,7 @@ export const DURATION_OPTIONS = [
 ];
 
 const DEFAULT_STAFF_SIZE_MM = 1.7;
+const TECHNIQUES_PER_RENDER_DOCUMENT = 1;
 
 export const DISPLAY_SIZE_OPTIONS = [
   { value: 1, label: 'Default', staffSizeMm: DEFAULT_STAFF_SIZE_MM },
@@ -1349,9 +1350,18 @@ function typstDocument(body, options = {}) {
 ${body}`;
 }
 
-function sourceForEntry(entry) {
+function scoreCallForEntry(entry) {
+  return scoreCallForSettings(
+    entry.settings,
+    entry.title,
+    subtitleForSettings(entry.settings),
+    { compact: true },
+  );
+}
+
+function sourceForEntries(entries) {
   return typstDocument(
-    scoreCallForSettings(entry.settings, entry.title, subtitleForSettings(entry.settings), { compact: true }),
+    entries.map(scoreCallForEntry).join('\n\n#v(2mm)\n\n'),
     { compact: true },
   );
 }
@@ -1376,14 +1386,18 @@ export function buildTechniqueDocument(settings) {
 }
 
 export function buildTechniqueCollectionDocument(collectionSettings) {
-  const entries = collectionEntriesForSettings(collectionSettings).map((entry) => {
-    const source = sourceForEntry(entry);
-    return {
-      ...entry,
+  const entries = collectionEntriesForSettings(collectionSettings);
+  const renderEntries = [];
+  for (let index = 0; index < entries.length; index += TECHNIQUES_PER_RENDER_DOCUMENT) {
+    const chunk = entries.slice(index, index + TECHNIQUES_PER_RENDER_DOCUMENT);
+    const source = sourceForEntries(chunk);
+    renderEntries.push({
       id: stableIdForSource(source),
+      title: chunk.map((entry) => entry.title).join(' / '),
+      techniqueCount: chunk.length,
       source,
-    };
-  });
+    });
+  }
   const title = collectionSettings.title || DEFAULT_COLLECTION_SETTINGS.title;
   const body = entries.length === 0
     ? `#align(center)[#text(size: 18pt, weight: "bold")[${typstContent(title)}]]
@@ -1394,17 +1408,13 @@ export function buildTechniqueCollectionDocument(collectionSettings) {
 #v(5mm)
 
 ${entries
-    .map((entry) => scoreCallForSettings(
-      entry.settings,
-      entry.title,
-      subtitleForSettings(entry.settings),
-      { compact: true },
-    ))
+    .map(scoreCallForEntry)
     .join('\n\n#v(2mm)\n\n')}`;
 
   return {
     title,
     entries,
+    renderEntries,
     source: typstDocument(body),
   };
 }
