@@ -58,6 +58,7 @@ export const DIRECTIONS = {
 export const KEY_ORDERS = {
   CHROMATIC: 'chromatic',
   FIFTHS: 'fifths',
+  ACCIDENTALS: 'accidentals',
 };
 
 export const CHORD_PRESENTATION = {
@@ -116,7 +117,7 @@ export const DURATION_OPTIONS = [
 ];
 
 const DEFAULT_STAFF_SIZE_MM = 1.7;
-const TECHNIQUES_PER_RENDER_DOCUMENT = 1;
+const TECHNIQUES_PER_RENDER_DOCUMENT = 4;
 
 export const DISPLAY_SIZE_OPTIONS = [
   { value: 1, label: 'Default', staffSizeMm: DEFAULT_STAFF_SIZE_MM },
@@ -209,6 +210,7 @@ export const DEFAULT_COLLECTION_SETTINGS = {
   displayScale: 1,
   showFingerings: true,
   keyOrder: KEY_ORDERS.CHROMATIC,
+  pairRelativeKeys: false,
   includeScales: true,
   includeTriads: false,
   includeSevenths: false,
@@ -294,25 +296,62 @@ const KEY_SIGNATURE_COUNTS = {
 };
 const KEY_SIGNATURE_SHARP_ORDER = ['F', 'C', 'G', 'D', 'A', 'E', 'B'];
 const KEY_SIGNATURE_FLAT_ORDER = ['B', 'E', 'A', 'D', 'G', 'C', 'F'];
-const FIFTHS_ORDER = [
-  'C',
-  'G',
-  'D',
-  'A',
-  'E',
-  'B',
-  'F#',
-  'C#',
-  'G#',
-  'D#',
-  'A#',
-  'F',
-  'Bb',
-  'Eb',
-  'Ab',
-  'Db',
-  'Gb',
-  'Cb',
+
+// Each entry pairs a major key with its relative minor in chromatic root order.
+const CHROMATIC_KEY_PAIRS = [
+  { major: 'C',  minor: 'A'  },
+  { major: 'C#', minor: 'A#' },
+  { major: 'Db', minor: 'Bb' },
+  { major: 'D',  minor: 'B'  },
+  { major: 'Eb', minor: 'C'  },
+  { major: 'E',  minor: 'C#' },
+  { major: 'F',  minor: 'D'  },
+  { major: 'F#', minor: 'D#' },
+  { major: 'Gb', minor: 'Eb' },
+  { major: 'G',  minor: 'E'  },
+  { major: 'Ab', minor: 'F'  },
+  { major: 'A',  minor: 'F#' },
+  { major: 'Bb', minor: 'G'  },
+  { major: 'B',  minor: 'G#' },
+  { major: 'Cb', minor: 'Ab' },
+];
+
+// Circle of fifths: each major key followed by its relative minor (0 acc → 7#/7b).
+const FIFTHS_KEY_PAIRS = [
+  { major: 'C',  minor: 'A'  },
+  { major: 'G',  minor: 'E'  },
+  { major: 'D',  minor: 'B'  },
+  { major: 'A',  minor: 'F#' },
+  { major: 'E',  minor: 'C#' },
+  { major: 'B',  minor: 'G#' },
+  { major: 'F#', minor: 'D#' },
+  { major: 'C#', minor: 'A#' },
+  { major: 'F',  minor: 'D'  },
+  { major: 'Bb', minor: 'G'  },
+  { major: 'Eb', minor: 'C'  },
+  { major: 'Ab', minor: 'F'  },
+  { major: 'Db', minor: 'Bb' },
+  { major: 'Gb', minor: 'Eb' },
+  { major: 'Cb', minor: 'Ab' },
+];
+
+// Least to most accidentals: C (0), then alternating 1#/1b, 2#/2b, …, 7#/7b.
+const ACCIDENTALS_KEY_PAIRS = [
+  { major: 'C',  minor: 'A'  },
+  { major: 'G',  minor: 'E'  },
+  { major: 'F',  minor: 'D'  },
+  { major: 'D',  minor: 'B'  },
+  { major: 'Bb', minor: 'G'  },
+  { major: 'A',  minor: 'F#' },
+  { major: 'Eb', minor: 'C'  },
+  { major: 'E',  minor: 'C#' },
+  { major: 'Ab', minor: 'F'  },
+  { major: 'B',  minor: 'G#' },
+  { major: 'Db', minor: 'Bb' },
+  { major: 'F#', minor: 'D#' },
+  { major: 'Gb', minor: 'Eb' },
+  { major: 'C#', minor: 'A#' },
+  { major: 'Cb', minor: 'Ab' },
 ];
 
 function makeTriadFingerings() {
@@ -436,17 +475,27 @@ function getOption(options, value) {
   return options.find((option) => option.value === value) ?? options[0];
 }
 
-function optionOrderIndex(option, order) {
-  if (order !== KEY_ORDERS.FIFTHS) {
+function getOrderedKeyPairs(keyOrder) {
+  if (keyOrder === KEY_ORDERS.FIFTHS) return FIFTHS_KEY_PAIRS;
+  if (keyOrder === KEY_ORDERS.ACCIDENTALS) return ACCIDENTALS_KEY_PAIRS;
+  return CHROMATIC_KEY_PAIRS;
+}
+
+function optionOrderIndex(option, order, isMinorOrder = false) {
+  if (order === KEY_ORDERS.CHROMATIC) {
     return KEY_OPTIONS.findIndex((keyOption) => keyOption.value === option.value);
   }
 
-  const index = FIFTHS_ORDER.indexOf(option.value);
-  return index === -1 ? FIFTHS_ORDER.length : index;
+  const pairs = order === KEY_ORDERS.ACCIDENTALS ? ACCIDENTALS_KEY_PAIRS : FIFTHS_KEY_PAIRS;
+  const orderList = isMinorOrder ? pairs.map((p) => p.minor) : pairs.map((p) => p.major);
+  const index = orderList.indexOf(option.value);
+  return index === -1 ? orderList.length : index;
 }
 
-function orderKeyOptions(options, order) {
-  return [...options].sort((a, b) => optionOrderIndex(a, order) - optionOrderIndex(b, order));
+function orderKeyOptions(options, order, isMinorOrder = false) {
+  return [...options].sort(
+    (a, b) => optionOrderIndex(a, order, isMinorOrder) - optionOrderIndex(b, order, isMinorOrder),
+  );
 }
 
 function isMinorScale(scaleType) {
@@ -1222,11 +1271,12 @@ ${formatTypstStaves(staves)},
 }
 
 function collectionKeyOptions(settings, order) {
-  const options = usesMinorKeySignature(settings)
+  const isMinor = usesMinorKeySignature(settings);
+  const options = isMinor
     ? KEY_OPTIONS.filter((option) => option.minorKey)
     : KEY_OPTIONS.filter((option) => option.majorKey);
 
-  return orderKeyOptions(options, order);
+  return orderKeyOptions(options, order, isMinor);
 }
 
 function inversionLabel(inversion) {
@@ -1265,34 +1315,36 @@ function addCollectionEntriesForKeys(entries, collectionSettings, settingsTempla
 
 function addScaleEntries(entries, collectionSettings) {
   const base = collectionBaseSettings(collectionSettings);
+  // For ALL key orders, iterate by (major, relative-minor) key pairs so that each major key
+  // is always immediately followed by its relative minor variants.
+  const pairs = getOrderedKeyPairs(collectionSettings.keyOrder);
+  const minorScaleOptions = SCALE_OPTIONS.filter((o) => isMinorScale(o.value));
 
-  if (collectionSettings.keyOrder === KEY_ORDERS.CHROMATIC) {
-    // Group by root: for each key in chromatic order, add all applicable scale types together
-    // (C major + C natural/harmonic/melodic minor, then C#/Db major + C# minor, etc.)
-    KEY_OPTIONS.forEach((keyOption) => {
-      SCALE_OPTIONS.forEach((scaleOption) => {
-        const minor = isMinorScale(scaleOption.value);
-        if (minor && !keyOption.minorKey) return;
-        if (!minor && !keyOption.majorKey) return;
-        const settings = {
-          ...base,
-          technique: TECHNIQUE_TYPES.SCALE,
-          scaleType: scaleOption.value,
-          key: keyOption.value,
-        };
-        entries.push({ settings, title: techniqueLabel(settings) });
-      });
-    });
-  } else {
-    SCALE_OPTIONS.forEach((scaleOption) => {
-      const template = {
+  pairs.forEach(({ major, minor }) => {
+    const majorKeyOpt = KEY_OPTIONS.find((opt) => opt.value === major && opt.majorKey);
+    const minorKeyOpt = KEY_OPTIONS.find((opt) => opt.value === minor && opt.minorKey);
+
+    if (majorKeyOpt) {
+      const s = {
         ...base,
         technique: TECHNIQUE_TYPES.SCALE,
-        scaleType: scaleOption.value,
+        scaleType: scaleTypes.MAJOR,
+        key: major,
       };
-      addCollectionEntriesForKeys(entries, collectionSettings, template);
-    });
-  }
+      entries.push({ settings: s, title: techniqueLabel(s) });
+    }
+    if (minorKeyOpt) {
+      minorScaleOptions.forEach((scaleOpt) => {
+        const s = {
+          ...base,
+          technique: TECHNIQUE_TYPES.SCALE,
+          scaleType: scaleOpt.value,
+          key: minor,
+        };
+        entries.push({ settings: s, title: techniqueLabel(s) });
+      });
+    }
+  });
 }
 
 function addTriadEntries(entries, collectionSettings) {
@@ -1371,7 +1423,91 @@ function addArpeggioEntries(entries, collectionSettings) {
   });
 }
 
+// When pairRelativeKeys is on, group all selected technique families by relative key pair.
+function collectionEntriesGroupedByPair(collectionSettings) {
+  const base = collectionBaseSettings(collectionSettings);
+  const pairs = getOrderedKeyPairs(collectionSettings.keyOrder);
+  const entries = [];
+  const minorScaleOptions = SCALE_OPTIONS.filter((o) => isMinorScale(o.value));
+
+  pairs.forEach(({ major, minor }) => {
+    const majorKeyOpt = KEY_OPTIONS.find((opt) => opt.value === major && opt.majorKey);
+    const minorKeyOpt = KEY_OPTIONS.find((opt) => opt.value === minor && opt.minorKey);
+
+    if (collectionSettings.includeScales) {
+      if (majorKeyOpt) {
+        const s = { ...base, technique: TECHNIQUE_TYPES.SCALE, scaleType: scaleTypes.MAJOR, key: major };
+        entries.push({ settings: s, title: techniqueLabel(s) });
+      }
+      if (minorKeyOpt) {
+        minorScaleOptions.forEach((scaleOpt) => {
+          const s = { ...base, technique: TECHNIQUE_TYPES.SCALE, scaleType: scaleOpt.value, key: minor };
+          entries.push({ settings: s, title: techniqueLabel(s) });
+        });
+      }
+    }
+
+    if (collectionSettings.includeTriads) {
+      TRIAD_OPTIONS.forEach((qualOpt) => {
+        const useMinor = qualOpt.value === 'minor' || qualOpt.value === 'diminished';
+        const keyVal = useMinor ? minor : major;
+        const keyOpt = useMinor ? minorKeyOpt : majorKeyOpt;
+        if (!keyOpt) return;
+        if (collectionSettings.triadPresentation !== CHORD_PRESENTATION.BROKEN) {
+          const s = { ...base, technique: TECHNIQUE_TYPES.TRIAD, triadQuality: qualOpt.value, key: keyVal };
+          entries.push({ settings: s, title: techniqueLabel(s) });
+        }
+        if (collectionSettings.triadPresentation !== CHORD_PRESENTATION.SOLID) {
+          const s = { ...base, technique: TECHNIQUE_TYPES.ARPEGGIO, arpeggioQuality: `triad-${qualOpt.value}`, brokenChord: true, key: keyVal };
+          entries.push({ settings: s, title: `${techniqueLabel(s)} - Broken` });
+        }
+      });
+    }
+
+    if (collectionSettings.includeSevenths) {
+      SEVENTH_OPTIONS.forEach((qualOpt) => {
+        const q = qualOpt.value.toLowerCase();
+        const useMinor = q.includes('minor') || q.includes('diminished');
+        const keyVal = useMinor ? minor : major;
+        const keyOpt = useMinor ? minorKeyOpt : majorKeyOpt;
+        if (!keyOpt) return;
+        if (collectionSettings.seventhPresentation !== CHORD_PRESENTATION.BROKEN) {
+          const s = { ...base, technique: TECHNIQUE_TYPES.SEVENTH, seventhQuality: qualOpt.value, key: keyVal };
+          entries.push({ settings: s, title: techniqueLabel(s) });
+        }
+        if (collectionSettings.seventhPresentation !== CHORD_PRESENTATION.SOLID) {
+          const s = { ...base, technique: TECHNIQUE_TYPES.ARPEGGIO, arpeggioQuality: `seventh-${qualOpt.value}`, brokenChord: true, key: keyVal };
+          entries.push({ settings: s, title: `${techniqueLabel(s)} - Broken` });
+        }
+      });
+    }
+
+    if (collectionSettings.includeArpeggios) {
+      ARPEGGIO_OPTIONS.forEach((option) => {
+        const q = option.value.toLowerCase();
+        const useMinor = q.includes('minor') || q.includes('diminished');
+        const keyVal = useMinor ? minor : major;
+        const keyOpt = useMinor ? minorKeyOpt : majorKeyOpt;
+        if (!keyOpt) return;
+        const inversions = collectionSettings.arpeggioPresentation === ARPEGGIO_PRESENTATION.ROOT_AND_INVERSIONS
+          ? Array.from({ length: option.chordSize }, (_, idx) => idx)
+          : [null];
+        inversions.forEach((inversion) => {
+          const titleSuffix = inversion == null ? '' : ` - ${inversionLabel(inversion)}`;
+          const s = { ...base, technique: TECHNIQUE_TYPES.ARPEGGIO, arpeggioQuality: option.value, brokenChord: false, arpeggioInversion: inversion, key: keyVal };
+          entries.push({ settings: s, title: `${techniqueLabel(s)}${titleSuffix}` });
+        });
+      });
+    }
+  });
+
+  return entries;
+}
+
 export function collectionEntriesForSettings(collectionSettings) {
+  if (collectionSettings.pairRelativeKeys) {
+    return collectionEntriesGroupedByPair(collectionSettings);
+  }
   const entries = [];
   if (collectionSettings.includeScales) addScaleEntries(entries, collectionSettings);
   if (collectionSettings.includeTriads) addTriadEntries(entries, collectionSettings);

@@ -33,6 +33,7 @@ const renderModeOptions = [
 const keyOrderOptions = [
   { value: KEY_ORDERS.CHROMATIC, label: 'Chromatic from C' },
   { value: KEY_ORDERS.FIFTHS, label: 'Circle of fifths' },
+  { value: KEY_ORDERS.ACCIDENTALS, label: 'Fewest to most accidentals' },
 ];
 
 const chordPresentationOptions = [
@@ -304,6 +305,12 @@ export default function TechniqueCollectionBuilder() {
           </div>
 
           <div className="toggles section-toggles">
+            <ToggleField
+              id="pairRelativeKeys"
+              label="Pair relative keys"
+              checked={pendingSettings.pairRelativeKeys}
+              onChange={(value) => updateSetting('pairRelativeKeys', value)}
+            />
             <ToggleField
               id="includeScales"
               label="Scales"

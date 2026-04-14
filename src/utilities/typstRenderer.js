@@ -17,7 +17,7 @@ const renderWorkers = [];
 let renderQueue = Promise.resolve();
 
 const MAIN_FILE_PATH = '/technique.typ';
-const MAX_SVG_CACHE_ENTRIES = 250;
+const MAX_SVG_CACHE_ENTRIES = 500;
 const SVG_DATA_SELECTION = {
   body: true,
   defs: true,
@@ -152,7 +152,7 @@ function preferredWorkerCount(taskCount) {
   const cores = typeof navigator === 'undefined'
     ? 4
     : navigator.hardwareConcurrency || 4;
-  const desired = cores >= 8 ? 4 : 2;
+  const desired = cores >= 16 ? 8 : cores >= 8 ? 6 : cores >= 4 ? 4 : 2;
   return Math.max(1, Math.min(taskCount, desired));
 }
 
