@@ -929,6 +929,22 @@ function fallbackArpeggioFingering(option, hand) {
       : makeArpeggioFingerings([5, 3, 2], [1, 3, 2], 1);
 }
 
+function isDescendingMelodicMinorNaturalIndex(settings, index) {
+  if (settings.scaleType !== scaleTypes.MINOR_M) return false;
+
+  if (settings.direction === DIRECTIONS.DOWN) {
+    return index % 7 === 1 || index % 7 === 2;
+  }
+
+  if (settings.direction === DIRECTIONS.BOTH) {
+    const ascendingLength = effectiveOctaves(settings) * 7 + 1;
+    const descendingIndex = index - ascendingLength;
+    return descendingIndex >= 0 && (descendingIndex % 7 === 0 || descendingIndex % 7 === 1);
+  }
+
+  return false;
+}
+
 function arpeggioFingeringForKey(option, hand, settings) {
   const group = option.chordSize === 4 ? 'seventhArpeggios' : 'triadArpeggios';
   const quality = option.value.replace(/^(triad|seventh)-/, '');
@@ -993,14 +1009,17 @@ function scaleMusicForHand(settings, hand) {
     const parsed = scaleNoteToPitch(note.note);
     const diatonic = diatonicNotes[index];
     const letter = diatonic?.letter ?? null;
+    const forceNatural = isDescendingMelodicMinorNaturalIndex(settings, index);
     return {
       ...parsed,
       octave: diatonic?.octave ?? parsed.octave,
       letter,
       accidental: letter
-        ? useKeySignature
-          ? accidentalForKeySignature(parsed.index, letter, signatureAccidentals)
-          : accidentalForWrittenPitch(parsed.index, letter)
+        ? forceNatural
+          ? '='
+          : useKeySignature
+            ? accidentalForKeySignature(parsed.index, letter, signatureAccidentals)
+            : accidentalForWrittenPitch(parsed.index, letter)
         : '',
       fingering: note.fingering,
       duration: index === notes.length - 1
