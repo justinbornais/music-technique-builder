@@ -439,9 +439,9 @@ export default function TechniqueCollectionBuilder() {
           <div className="score-toolbar">
             <span>
               {isRendering
-                ? `Rendering ${visibleCompletedCount}/${document?.entries.length ?? 0}`
+                ? `Rendering ${visibleCompletedCount}/${document?.techniqueCount ?? 0}`
                 : committedSettings
-                  ? `${document.entries.length} techniques`
+                  ? `${document.techniqueCount} techniques`
                   : 'Not generated'}
             </span>
             <span>Scorify + Typst WASM</span>

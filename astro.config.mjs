@@ -6,6 +6,14 @@ import react from '@astrojs/react';
 export default defineConfig({
     integrations: [react()],
     vite: {
+        optimizeDeps: {
+            exclude: [
+                '@myriaddreamin/typst.ts',
+                '@myriaddreamin/typst.ts/contrib/snippet',
+                '@myriaddreamin/typst-ts-renderer',
+                '@myriaddreamin/typst-ts-web-compiler',
+            ],
+        },
         worker: {
             format: 'es',
         },

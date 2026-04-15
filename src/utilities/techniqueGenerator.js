@@ -253,6 +253,7 @@ function noteFromPitch(pitch) {
 
 const LEFT_HAND_TREBLE_MIN_PITCH = pitchFromNote(5, 4);
 const SCALE_CLEF_CHANGE_GROUP_SIZE = 4;
+const ARPEGGIO_CLEF_CHANGE_GROUP_SIZE = 4;
 const LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
 const LETTER_BASE_INDEX = {
   A: 0,
@@ -517,10 +518,6 @@ function selectedKeyOption(settings) {
   return options.find((option) => option.value === settings.key) ?? options[0] ?? KEY_OPTIONS[0];
 }
 
-function selectedRoot(settings) {
-  return selectedKeyOption(settings).index;
-}
-
 function selectedSpelling(settings) {
   return selectedKeyOption(settings).spelling;
 }
@@ -576,6 +573,18 @@ function formatDuration(duration) {
   return Number(duration) || 8;
 }
 
+function solidChordDuration(duration) {
+  return Math.min(formatDuration(duration), 4);
+}
+
+function techniqueDuration(settings) {
+  if (settings.technique === TECHNIQUE_TYPES.TRIAD || settings.technique === TECHNIQUE_TYPES.SEVENTH) {
+    return solidChordDuration(settings.duration);
+  }
+
+  return formatDuration(settings.duration);
+}
+
 function clampScaleOctaves(octaves) {
   return Math.min(2, Math.max(1, Number(octaves) || DEFAULT_SETTINGS.octaves));
 }
@@ -593,6 +602,10 @@ function effectiveOctaves(settings) {
 }
 
 function finalScaleDuration(duration) {
+  return Math.min(formatDuration(duration), 4);
+}
+
+function finalArpeggioDuration(duration) {
   return Math.min(formatDuration(duration), 4);
 }
 
@@ -803,6 +816,10 @@ function scaleNoteToPitch(note) {
 }
 
 function pitchForNote(note) {
+  if (Number.isFinite(note.pitch)) {
+    return note.pitch;
+  }
+
   if (note.letter) {
     return pitchFromNote(LETTER_BASE_INDEX[note.letter], note.octave);
   }
@@ -825,8 +842,8 @@ function contextForClef(context, clef) {
   };
 }
 
-function musicLine(tokens) {
-  return tokens.join(' ');
+function musicLine(tokens, separator = ' ') {
+  return tokens.join(separator);
 }
 
 function roundedClefBoundaries(items, pitchForItem, groupSize) {
@@ -843,15 +860,22 @@ function roundedClefBoundaries(items, pitchForItem, groupSize) {
 
   const boundaries = new Map();
   let previousBoundary = 0;
+  const lastBoundary = Math.floor((items.length - 1) / groupSize) * groupSize;
+  if (lastBoundary <= 0) {
+    return boundaries;
+  }
 
   transitions.forEach(({ clef, index }) => {
     let boundary = Math.round(index / groupSize) * groupSize;
     if (clef === 'bass' && boundary < index) {
       boundary = Math.ceil(index / groupSize) * groupSize;
     }
-    boundary = Math.max(1, Math.min(items.length - 1, boundary));
+    if (boundary <= 0) {
+      boundary = groupSize;
+    }
+    boundary = Math.min(lastBoundary, boundary);
     if (boundary <= previousBoundary) {
-      boundary = Math.min(items.length - 1, previousBoundary + 1);
+      boundary = previousBoundary + groupSize;
     }
 
     if (boundary > 0 && boundary < items.length) {
@@ -956,6 +980,59 @@ function arpeggioFingeringForKey(option, hand, settings) {
   return fallbackArpeggioFingering(option, hand);
 }
 
+function chordToneLetter(rootLetter, degree) {
+  const rootLetterIndex = LETTERS.indexOf(rootLetter);
+  return LETTERS[(rootLetterIndex + degree * 2) % LETTERS.length];
+}
+
+function chordToneWrittenOctave(rootLetter, rootOctave, degree, positionOctave, wrapsAboveRoot) {
+  const rootLetterIndex = LETTERS.indexOf(rootLetter);
+  const letterSteps = positionOctave * LETTERS.length
+    + degree * 2
+    + (wrapsAboveRoot ? LETTERS.length : 0);
+  return rootOctave + Math.floor((rootLetterIndex + letterSteps) / LETTERS.length);
+}
+
+function spelledInversionChord(rootPitch, intervals, position, rootLetter, rootOctave, settings) {
+  const size = intervals.length;
+  const positionOctave = Math.floor(position / size);
+  const inversion = position % size;
+  const useKeySignature = shouldUseKeySignature(settings);
+  const signatureAccidentals = useKeySignature
+    ? keySignatureAccidentals(keyForSettings(settings))
+    : {};
+  const degrees = [
+    ...Array.from({ length: size - inversion }, (_, index) => inversion + index),
+    ...Array.from({ length: inversion }, (_, index) => index),
+  ];
+
+  return degrees.map((degree) => {
+    const wrapsAboveRoot = degree < inversion;
+    const pitch = rootPitch
+      + (positionOctave + (wrapsAboveRoot ? 1 : 0)) * 12
+      + intervals[degree];
+    const sounded = noteFromPitch(pitch);
+    const letter = chordToneLetter(rootLetter, degree);
+    const octave = chordToneWrittenOctave(
+      rootLetter,
+      rootOctave,
+      degree,
+      positionOctave,
+      wrapsAboveRoot,
+    );
+
+    return {
+      ...sounded,
+      pitch,
+      letter,
+      octave,
+      accidental: useKeySignature
+        ? accidentalForKeySignature(sounded.index, letter, signatureAccidentals)
+        : accidentalForWrittenPitch(sounded.index, letter),
+    };
+  });
+}
+
 // For melodic minor, ascending uses raised 6th and 7th; descending reverts to natural minor.
 function getScaleNotesForSettings(settings, keyOption, hand, spelling, useKeySignature) {
   const isRightHand = hand === HANDS.RIGHT;
@@ -1039,59 +1116,109 @@ function scaleMusicForHand(settings, hand) {
   return musicLine(tokens);
 }
 
-function buildChordPitches(root, intervals, rootOctave, octaves, includeFinalRoot = false) {
-  const rootPitch = pitchFromNote(root, rootOctave);
-  const pitches = [];
+function brokenTriadGroupsForHand(settings, hand, option) {
+  const handConfig = HAND_CONFIG[hand];
+  const quality = option.value.replace(/^triad-/, '');
+  const keyOption = selectedKeyOption(settings);
+  const rootLetter = keyOption.value.charAt(0).toUpperCase();
+  const rootPitch = pitchFromNote(keyOption.index, handConfig.rootOctave);
+  const positionCount = option.intervals.length + 1;
+  const ascending = Array.from({ length: positionCount }, (_, position) => {
+    const notes = spelledInversionChord(
+      rootPitch,
+      option.intervals,
+      position,
+      rootLetter,
+      handConfig.rootOctave,
+      settings,
+    );
+    const fingering = chordFingering('triads', quality, hand, position, option.intervals.length);
 
-  for (let octave = 0; octave < octaves; octave += 1) {
-    intervals.forEach((interval) => pitches.push(rootPitch + octave * 12 + interval));
-  }
+    return {
+      notes: notes.map((note, index) => ({
+        ...note,
+        fingering: fingering[index],
+      })),
+    };
+  });
+  const descending = [...ascending].reverse().map((group) => ({
+    notes: [...group.notes]
+      .reverse()
+      .map((note) => ({ ...note })),
+  }));
 
-  if (includeFinalRoot) {
-    pitches.push(rootPitch + octaves * 12);
-  }
-
-  return pitches.map(noteFromPitch);
+  if (settings.direction === DIRECTIONS.UP) return ascending;
+  if (settings.direction === DIRECTIONS.DOWN) return descending;
+  return [...ascending, ...descending];
 }
 
-function buildInversionArpeggioPitches(root, intervals, rootOctave, octaves, inversion) {
-  const rootPitch = pitchFromNote(root, rootOctave);
-  const base = inversionChord(rootPitch, intervals, inversion);
-  const basePitches = base.map(pitchForNote);
-  const pitches = [];
+function pitchForBrokenTriadGroup(group) {
+  return Math.max(...group.notes.map(pitchForNote));
+}
+
+function brokenTriadMusicForHand(settings, hand, option) {
+  const handConfig = HAND_CONFIG[hand];
+  const groups = brokenTriadGroupsForHand(settings, hand, option);
+  const context = {
+    ...handConfig,
+    spelling: selectedSpelling(settings),
+    duration: Number(settings.duration),
+    showFingerings: settings.showFingerings,
+    useKeySignature: shouldUseKeySignature(settings),
+  };
+  const tokens = tokensWithLeftHandClefs(
+    groups,
+    context,
+    (group, activeContext) => group.notes.map((note) => noteToken(note, activeContext)).join(' '),
+    pitchForBrokenTriadGroup,
+  );
+
+  return musicLine(tokens, '  ');
+}
+
+function noteInWrittenOctave(note, octaveOffset) {
+  return {
+    ...note,
+    pitch: note.pitch + octaveOffset * 12,
+    octave: note.octave + octaveOffset,
+  };
+}
+
+function buildArpeggioNotes(settings, handConfig, option, octaves, inversion) {
+  const keyOption = selectedKeyOption(settings);
+  const rootPitch = pitchFromNote(keyOption.index, handConfig.rootOctave);
+  const rootLetter = keyOption.value.charAt(0).toUpperCase();
+  const base = spelledInversionChord(
+    rootPitch,
+    option.intervals,
+    inversion ?? 0,
+    rootLetter,
+    handConfig.rootOctave,
+    settings,
+  );
+  const notes = [];
 
   for (let octave = 0; octave < octaves; octave += 1) {
-    basePitches.forEach((pitch) => pitches.push(pitch + octave * 12));
+    base.forEach((note) => notes.push(noteInWrittenOctave(note, octave)));
   }
 
-  pitches.push(basePitches[0] + octaves * 12);
-
-  return pitches.map(noteFromPitch);
+  notes.push(noteInWrittenOctave(base[0], octaves));
+  return notes;
 }
 
 function arpeggioMusicForHand(settings, hand) {
   const handConfig = HAND_CONFIG[hand];
   const option = getOption(ARPEGGIO_OPTIONS, settings.arpeggioQuality);
+  if (settings.brokenChord && option.chordSize === 3) {
+    return brokenTriadMusicForHand(settings, hand, option);
+  }
+
   const spelling = selectedSpelling(settings);
   const octaves = effectiveOctaves(settings);
   const inversion = Number.isInteger(settings.arpeggioInversion)
     ? settings.arpeggioInversion
     : null;
-  const notes = inversion == null
-    ? buildChordPitches(
-      selectedRoot(settings),
-      option.intervals,
-      handConfig.rootOctave,
-      octaves,
-      true,
-    )
-    : buildInversionArpeggioPitches(
-      selectedRoot(settings),
-      option.intervals,
-      handConfig.rootOctave,
-      octaves,
-      inversion,
-    );
+  const notes = buildArpeggioNotes(settings, handConfig, option, octaves, inversion);
   const directed = withDirection(notes, settings.direction);
   const fingering = arpeggioFingeringForKey(option, hand, settings);
 
@@ -1106,6 +1233,7 @@ function arpeggioMusicForHand(settings, hand) {
   const arpeggioNotes = directed.map((note, index) => {
     const originalIndex = settings.direction === DIRECTIONS.DOWN ? directed.length - index - 1 : index;
     const isFinalRoot = originalIndex === notes.length - 1;
+    const isEndingNote = index === directed.length - 1;
     const blockSize = option.chordSize;
     const blockIndex = Math.floor(originalIndex / blockSize);
     const withinBlock = originalIndex % blockSize;
@@ -1115,6 +1243,9 @@ function arpeggioMusicForHand(settings, hand) {
       fingering: isFinalRoot
         ? fingering.finalRoot
         : pattern[withinBlock],
+      duration: isEndingNote
+        ? finalArpeggioDuration(settings.duration)
+        : formatDuration(settings.duration),
     };
   });
   const tokens = tokensWithLeftHandClefs(
@@ -1122,35 +1253,36 @@ function arpeggioMusicForHand(settings, hand) {
     context,
     (note, activeContext) => noteToken(note, activeContext),
     pitchForNote,
+    { roundToGroupSize: ARPEGGIO_CLEF_CHANGE_GROUP_SIZE },
   );
 
   return musicLine(tokens);
-}
-
-function inversionChord(rootPitch, intervals, position) {
-  const size = intervals.length;
-  const octave = Math.floor(position / size);
-  const inversion = position % size;
-  const lower = intervals.slice(inversion).map((interval) => rootPitch + octave * 12 + interval);
-  const upper = intervals.slice(0, inversion).map((interval) => rootPitch + (octave + 1) * 12 + interval);
-  return [...lower, ...upper].map(noteFromPitch);
 }
 
 function chordMusicForHand(settings, hand, options, quality) {
   const handConfig = HAND_CONFIG[hand];
   const option = getOption(options, quality);
   const spelling = selectedSpelling(settings);
-  const rootPitch = pitchFromNote(selectedRoot(settings), handConfig.rootOctave);
+  const keyOption = selectedKeyOption(settings);
+  const rootPitch = pitchFromNote(keyOption.index, handConfig.rootOctave);
+  const rootLetter = keyOption.value.charAt(0).toUpperCase();
   const totalPositions = effectiveOctaves(settings) * option.intervals.length + 1;
   const chords = Array.from({ length: totalPositions }, (_, index) => ({
-    notes: inversionChord(rootPitch, option.intervals, index),
+    notes: spelledInversionChord(
+      rootPitch,
+      option.intervals,
+      index,
+      rootLetter,
+      handConfig.rootOctave,
+      settings,
+    ),
     position: index,
   }));
   const directed = withDirection(chords, settings.direction);
   const context = {
     ...handConfig,
     spelling,
-    duration: Number(settings.duration),
+    duration: solidChordDuration(settings.duration),
     showFingerings: settings.showFingerings,
     useKeySignature: shouldUseKeySignature(settings),
   };
@@ -1233,7 +1365,7 @@ function handLabelForSettings(settings) {
 function subtitleForSettings(settings) {
   const octaves = effectiveOctaves(settings);
   return `${handLabelForSettings(settings)} | ${octaves} octave${octaves === 1 ? '' : 's'} | ${
-    getOption(DURATION_OPTIONS, Number(settings.duration)).label
+    getOption(DURATION_OPTIONS, techniqueDuration(settings)).label
   }`;
 }
 
@@ -1264,14 +1396,32 @@ function formatTypstStaves(staves) {
     .join(',\n');
 }
 
-function scoreCallForSettings(
-  settings,
-  title = techniqueLabel(settings),
-  subtitle = subtitleForSettings(settings),
+function stavesForSettingsGroup(settingsGroup) {
+  const first = settingsGroup[0];
+  const hands = first.hand === HANDS.TOGETHER ? [HANDS.RIGHT, HANDS.LEFT] : [first.hand];
+
+  return hands.map((hand) => {
+    const config = HAND_CONFIG[hand];
+    const separator = hand === HANDS.LEFT ? ' | bass ' : ' | ';
+    return {
+      clef: config.clef,
+      music: settingsGroup.map((settings) => musicForHand(settings, hand)).join(separator),
+      fingeringPosition: config.fingeringPosition,
+    };
+  });
+}
+
+function scoreCallForSettingsGroup(
+  settingsGroup,
+  title,
+  subtitle,
   options = {},
 ) {
-  const staves = stavesForSettings(settings);
-  const key = keyForSettings(settings);
+  const first = settingsGroup[0];
+  const staves = settingsGroup.length === 1
+    ? stavesForSettings(first)
+    : stavesForSettingsGroup(settingsGroup);
+  const key = keyForSettings(first);
   const systemSpacing = options.compact ? '2mm' : '9mm';
 
   return `#score(
@@ -1279,7 +1429,7 @@ function scoreCallForSettings(
   subtitle: ${subtitle ? typstString(subtitle) : 'none'},
   key: ${typstString(key)},
   staff-group: ${typstString(staves.length > 1 ? 'grand' : 'none')},
-  staff-size: ${staffSizeForSettings(settings)}mm,
+  staff-size: ${staffSizeForSettings(first)}mm,
   staff-spacing: 9mm,
   system-spacing: ${systemSpacing},
   width: 235mm,
@@ -1288,6 +1438,15 @@ function scoreCallForSettings(
 ${formatTypstStaves(staves)},
   ),
 )`;
+}
+
+function scoreCallForSettings(
+  settings,
+  title = techniqueLabel(settings),
+  subtitle = subtitleForSettings(settings),
+  options = {},
+) {
+  return scoreCallForSettingsGroup([settings], title, subtitle, options);
 }
 
 function collectionKeyOptions(settings, order) {
@@ -1424,21 +1583,30 @@ function addArpeggioEntries(entries, collectionSettings) {
       arpeggioQuality: option.value,
       brokenChord: false,
     };
-    const inversions = collectionSettings.arpeggioPresentation === ARPEGGIO_PRESENTATION.ROOT_AND_INVERSIONS
-      ? Array.from({ length: option.chordSize }, (_, index) => index)
-      : [null];
+    const keyOptions = collectionKeyOptions(template, collectionSettings.keyOrder);
 
-    inversions.forEach((inversion) => {
-      const titleSuffix = inversion == null ? '' : ` - ${inversionLabel(inversion)}`;
-      addCollectionEntriesForKeys(
-        entries,
-        collectionSettings,
-        {
-          ...template,
-          arpeggioInversion: inversion,
-        },
-        titleSuffix,
-      );
+    keyOptions.forEach((keyOption) => {
+      const rootSettings = {
+        ...template,
+        key: keyOption.value,
+        arpeggioInversion: null,
+      };
+
+      if (collectionSettings.arpeggioPresentation !== ARPEGGIO_PRESENTATION.ROOT_AND_INVERSIONS) {
+        entries.push({ settings: rootSettings, title: techniqueLabel(rootSettings) });
+        return;
+      }
+
+      const settingsGroup = Array.from({ length: option.chordSize }, (_, inversion) => ({
+        ...rootSettings,
+        arpeggioInversion: inversion,
+      }));
+      entries.push({
+        settings: rootSettings,
+        settingsGroup,
+        techniqueCount: settingsGroup.length,
+        title: techniqueLabel(rootSettings),
+      });
     });
   });
 }
@@ -1509,13 +1677,21 @@ function collectionEntriesGroupedByPair(collectionSettings) {
         const keyVal = useMinor ? minor : major;
         const keyOpt = useMinor ? minorKeyOpt : majorKeyOpt;
         if (!keyOpt) return;
-        const inversions = collectionSettings.arpeggioPresentation === ARPEGGIO_PRESENTATION.ROOT_AND_INVERSIONS
-          ? Array.from({ length: option.chordSize }, (_, idx) => idx)
-          : [null];
-        inversions.forEach((inversion) => {
-          const titleSuffix = inversion == null ? '' : ` - ${inversionLabel(inversion)}`;
-          const s = { ...base, technique: TECHNIQUE_TYPES.ARPEGGIO, arpeggioQuality: option.value, brokenChord: false, arpeggioInversion: inversion, key: keyVal };
-          entries.push({ settings: s, title: `${techniqueLabel(s)}${titleSuffix}` });
+        const s = { ...base, technique: TECHNIQUE_TYPES.ARPEGGIO, arpeggioQuality: option.value, brokenChord: false, arpeggioInversion: null, key: keyVal };
+        if (collectionSettings.arpeggioPresentation !== ARPEGGIO_PRESENTATION.ROOT_AND_INVERSIONS) {
+          entries.push({ settings: s, title: techniqueLabel(s) });
+          return;
+        }
+
+        const settingsGroup = Array.from({ length: option.chordSize }, (_, inversion) => ({
+          ...s,
+          arpeggioInversion: inversion,
+        }));
+        entries.push({
+          settings: s,
+          settingsGroup,
+          techniqueCount: settingsGroup.length,
+          title: techniqueLabel(s),
         });
       });
     }
@@ -1547,11 +1723,21 @@ function typstDocument(body, options = {}) {
 ${body}`;
 }
 
+function settingsGroupForEntry(entry) {
+  return entry.settingsGroup ?? [entry.settings];
+}
+
+function techniqueCountForEntry(entry) {
+  return entry.techniqueCount ?? settingsGroupForEntry(entry).length;
+}
+
 function scoreCallForEntry(entry, options = {}) {
-  return scoreCallForSettings(
-    entry.settings,
+  const settingsGroup = settingsGroupForEntry(entry);
+  const first = settingsGroup[0];
+  return scoreCallForSettingsGroup(
+    settingsGroup,
     entry.title,
-    options.showDetails ? subtitleForSettings(entry.settings) : '',
+    options.showDetails ? subtitleForSettings(first) : '',
     { compact: true },
   );
 }
@@ -1594,11 +1780,12 @@ export function buildTechniqueCollectionDocument(collectionSettings) {
     renderEntries.push({
       id: stableIdForSource(source),
       title: chunk.map((entry) => entry.title).join(' / '),
-      techniqueCount: chunk.length,
+      techniqueCount: chunk.reduce((count, entry) => count + techniqueCountForEntry(entry), 0),
       source,
     });
   }
   const title = collectionSettings.title || DEFAULT_COLLECTION_SETTINGS.title;
+  const techniqueCount = entries.reduce((count, entry) => count + techniqueCountForEntry(entry), 0);
   const body = entries.length === 0
     ? `#align(center)[#text(size: 18pt, weight: "bold")[${typstContent(title)}]]
 
@@ -1614,6 +1801,7 @@ ${entries
   return {
     title,
     entries,
+    techniqueCount,
     renderEntries,
     source: typstDocument(body),
   };
