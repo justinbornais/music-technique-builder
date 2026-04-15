@@ -1478,9 +1478,21 @@ function collectionBaseSettings(collectionSettings) {
   };
 }
 
+function isKeyAllowed(keyValue, isMinorContext, collectionSettings) {
+  if (isMinorContext && collectionSettings.allowedMinorKeys) {
+    return collectionSettings.allowedMinorKeys.has(keyValue);
+  }
+  if (!isMinorContext && collectionSettings.allowedMajorKeys) {
+    return collectionSettings.allowedMajorKeys.has(keyValue);
+  }
+  return true;
+}
+
 function addCollectionEntriesForKeys(entries, collectionSettings, settingsTemplate, titleSuffix = '') {
   const keyOptions = collectionKeyOptions(settingsTemplate, collectionSettings.keyOrder);
+  const isMinorContext = usesMinorKeySignature(settingsTemplate);
   keyOptions.forEach((keyOption) => {
+    if (!isKeyAllowed(keyOption.value, isMinorContext, collectionSettings)) return;
     const settings = {
       ...settingsTemplate,
       key: keyOption.value,
@@ -1497,13 +1509,16 @@ function addScaleEntries(entries, collectionSettings) {
   // For ALL key orders, iterate by (major, relative-minor) key pairs so that each major key
   // is always immediately followed by its relative minor variants.
   const pairs = getOrderedKeyPairs(collectionSettings.keyOrder);
-  const minorScaleOptions = SCALE_OPTIONS.filter((o) => isMinorScale(o.value));
+  let minorScaleOptions = SCALE_OPTIONS.filter((o) => isMinorScale(o.value));
+  if (collectionSettings.excludeMelodicMinor) {
+    minorScaleOptions = minorScaleOptions.filter((o) => o.value !== scaleTypes.MINOR_M);
+  }
 
   pairs.forEach(({ major, minor }) => {
     const majorKeyOpt = KEY_OPTIONS.find((opt) => opt.value === major && opt.majorKey);
     const minorKeyOpt = KEY_OPTIONS.find((opt) => opt.value === minor && opt.minorKey);
 
-    if (majorKeyOpt) {
+    if (majorKeyOpt && isKeyAllowed(major, false, collectionSettings)) {
       const s = {
         ...base,
         technique: TECHNIQUE_TYPES.SCALE,
@@ -1512,7 +1527,7 @@ function addScaleEntries(entries, collectionSettings) {
       };
       entries.push({ settings: s, title: techniqueLabel(s) });
     }
-    if (minorKeyOpt) {
+    if (minorKeyOpt && isKeyAllowed(minor, true, collectionSettings)) {
       minorScaleOptions.forEach((scaleOpt) => {
         const s = {
           ...base,
@@ -1583,9 +1598,11 @@ function addArpeggioEntries(entries, collectionSettings) {
       arpeggioQuality: option.value,
       brokenChord: false,
     };
+    const isMinorContext = usesMinorKeySignature(template);
     const keyOptions = collectionKeyOptions(template, collectionSettings.keyOrder);
 
     keyOptions.forEach((keyOption) => {
+      if (!isKeyAllowed(keyOption.value, isMinorContext, collectionSettings)) return;
       const rootSettings = {
         ...template,
         key: keyOption.value,
@@ -1616,18 +1633,23 @@ function collectionEntriesGroupedByPair(collectionSettings) {
   const base = collectionBaseSettings(collectionSettings);
   const pairs = getOrderedKeyPairs(collectionSettings.keyOrder);
   const entries = [];
-  const minorScaleOptions = SCALE_OPTIONS.filter((o) => isMinorScale(o.value));
+  let minorScaleOptions = SCALE_OPTIONS.filter((o) => isMinorScale(o.value));
+  if (collectionSettings.excludeMelodicMinor) {
+    minorScaleOptions = minorScaleOptions.filter((o) => o.value !== scaleTypes.MINOR_M);
+  }
 
   pairs.forEach(({ major, minor }) => {
     const majorKeyOpt = KEY_OPTIONS.find((opt) => opt.value === major && opt.majorKey);
     const minorKeyOpt = KEY_OPTIONS.find((opt) => opt.value === minor && opt.minorKey);
+    const majorAllowed = majorKeyOpt && isKeyAllowed(major, false, collectionSettings);
+    const minorAllowed = minorKeyOpt && isKeyAllowed(minor, true, collectionSettings);
 
     if (collectionSettings.includeScales) {
-      if (majorKeyOpt) {
+      if (majorAllowed) {
         const s = { ...base, technique: TECHNIQUE_TYPES.SCALE, scaleType: scaleTypes.MAJOR, key: major };
         entries.push({ settings: s, title: techniqueLabel(s) });
       }
-      if (minorKeyOpt) {
+      if (minorAllowed) {
         minorScaleOptions.forEach((scaleOpt) => {
           const s = { ...base, technique: TECHNIQUE_TYPES.SCALE, scaleType: scaleOpt.value, key: minor };
           entries.push({ settings: s, title: techniqueLabel(s) });
@@ -1640,7 +1662,8 @@ function collectionEntriesGroupedByPair(collectionSettings) {
         const useMinor = qualOpt.value === 'minor' || qualOpt.value === 'diminished';
         const keyVal = useMinor ? minor : major;
         const keyOpt = useMinor ? minorKeyOpt : majorKeyOpt;
-        if (!keyOpt) return;
+        const allowed = useMinor ? minorAllowed : majorAllowed;
+        if (!keyOpt || !allowed) return;
         if (collectionSettings.triadPresentation !== CHORD_PRESENTATION.BROKEN) {
           const s = { ...base, technique: TECHNIQUE_TYPES.TRIAD, triadQuality: qualOpt.value, key: keyVal };
           entries.push({ settings: s, title: techniqueLabel(s) });
@@ -1658,7 +1681,8 @@ function collectionEntriesGroupedByPair(collectionSettings) {
         const useMinor = q.includes('minor') || q.includes('diminished');
         const keyVal = useMinor ? minor : major;
         const keyOpt = useMinor ? minorKeyOpt : majorKeyOpt;
-        if (!keyOpt) return;
+        const allowed = useMinor ? minorAllowed : majorAllowed;
+        if (!keyOpt || !allowed) return;
         if (collectionSettings.seventhPresentation !== CHORD_PRESENTATION.BROKEN) {
           const s = { ...base, technique: TECHNIQUE_TYPES.SEVENTH, seventhQuality: qualOpt.value, key: keyVal };
           entries.push({ settings: s, title: techniqueLabel(s) });
@@ -1676,7 +1700,8 @@ function collectionEntriesGroupedByPair(collectionSettings) {
         const useMinor = q.includes('minor') || q.includes('diminished');
         const keyVal = useMinor ? minor : major;
         const keyOpt = useMinor ? minorKeyOpt : majorKeyOpt;
-        if (!keyOpt) return;
+        const allowed = useMinor ? minorAllowed : majorAllowed;
+        if (!keyOpt || !allowed) return;
         const s = { ...base, technique: TECHNIQUE_TYPES.ARPEGGIO, arpeggioQuality: option.value, brokenChord: false, arpeggioInversion: null, key: keyVal };
         if (collectionSettings.arpeggioPresentation !== ARPEGGIO_PRESENTATION.ROOT_AND_INVERSIONS) {
           entries.push({ settings: s, title: techniqueLabel(s) });

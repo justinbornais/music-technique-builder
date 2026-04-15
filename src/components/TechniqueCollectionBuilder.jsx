@@ -7,11 +7,33 @@ import {
   DISPLAY_SIZE_OPTIONS,
   DURATION_OPTIONS,
   HANDS,
+  KEY_OPTIONS,
   KEY_ORDERS,
   RENDER_MODES,
+  SCALE_OPTIONS,
+  TRIAD_OPTIONS,
+  SEVENTH_OPTIONS,
+  ARPEGGIO_OPTIONS,
   buildTechniqueCollectionDocument,
+  collectionEntriesForSettings,
 } from '../utilities/techniqueGenerator.js';
 import { renderTypstSvgBatch, warmTypstRenderer } from '../utilities/typstRenderer.js';
+
+// ─── Constants ───
+
+const PRESETS = {
+  BEGINNER: 'beginner',
+  INTERMEDIATE: 'intermediate',
+  ADVANCED: 'advanced',
+  CUSTOM: 'custom',
+};
+
+const presetTabs = [
+  { value: PRESETS.BEGINNER, label: 'Beginner' },
+  { value: PRESETS.INTERMEDIATE, label: 'Intermediate' },
+  { value: PRESETS.ADVANCED, label: 'Advanced' },
+  { value: PRESETS.CUSTOM, label: 'Custom' },
+];
 
 const handOptions = [
   { value: HANDS.RIGHT, label: 'Right Hand' },
@@ -47,12 +69,110 @@ const arpeggioPresentationOptions = [
   { value: ARPEGGIO_PRESENTATION.ROOT_AND_INVERSIONS, label: 'Root and inversions' },
 ];
 
-const MAX_RESULT_CACHE_ENTRIES = 200;
-
 const octaveOptions = [
   { value: 1, label: '1 octave' },
   { value: 2, label: '2 octaves' },
 ];
+
+const MAX_RESULT_CACHE_ENTRIES = 200;
+
+// Keys up to 2 sharps/flats for beginner
+const BEGINNER_MAJOR_KEYS = new Set(['C', 'G', 'F', 'D', 'Bb']);
+const BEGINNER_MINOR_KEYS = new Set(['A', 'E', 'D', 'B', 'G']);
+
+// Keys up to 5 sharps/flats for intermediate
+const INTERMEDIATE_MAJOR_KEYS = new Set(['C', 'G', 'F', 'D', 'Bb', 'A', 'Eb', 'E', 'Ab', 'B', 'Db']);
+const INTERMEDIATE_MINOR_KEYS = new Set(['A', 'E', 'D', 'B', 'G', 'F#', 'C', 'C#', 'F', 'G#', 'Bb']);
+
+function presetToSettings(preset, shared) {
+  const base = {
+    ...DEFAULT_COLLECTION_SETTINGS,
+    ...shared,
+  };
+
+  switch (preset) {
+    case PRESETS.BEGINNER:
+      return {
+        ...base,
+        title: 'Beginner Technique Collection',
+        hand: HANDS.TOGETHER,
+        duration: 8,
+        octaves: 1,
+        includeScales: true,
+        includeTriads: true,
+        includeSevenths: false,
+        includeArpeggios: false,
+        triadPresentation: CHORD_PRESENTATION.BOTH,
+        pairRelativeKeys: false,
+        allowedMajorKeys: BEGINNER_MAJOR_KEYS,
+        allowedMinorKeys: BEGINNER_MINOR_KEYS,
+        excludeMelodicMinor: true,
+      };
+    case PRESETS.INTERMEDIATE:
+      return {
+        ...base,
+        title: 'Intermediate Technique Collection',
+        includeScales: true,
+        includeTriads: true,
+        includeSevenths: true,
+        includeArpeggios: true,
+        triadPresentation: CHORD_PRESENTATION.BOTH,
+        seventhPresentation: CHORD_PRESENTATION.BOTH,
+        arpeggioPresentation: ARPEGGIO_PRESENTATION.ROOT_ONLY,
+        pairRelativeKeys: false,
+        allowedMajorKeys: INTERMEDIATE_MAJOR_KEYS,
+        allowedMinorKeys: INTERMEDIATE_MINOR_KEYS,
+        excludeMelodicMinor: false,
+      };
+    case PRESETS.ADVANCED:
+      return {
+        ...base,
+        title: 'Advanced Technique Collection',
+        includeScales: true,
+        includeTriads: true,
+        includeSevenths: true,
+        includeArpeggios: true,
+        triadPresentation: CHORD_PRESENTATION.BOTH,
+        seventhPresentation: CHORD_PRESENTATION.BOTH,
+        arpeggioPresentation: ARPEGGIO_PRESENTATION.ROOT_AND_INVERSIONS,
+        pairRelativeKeys: true,
+      };
+    default:
+      return base;
+  }
+}
+
+// ─── Icon Components ───
+
+function ChevronIcon({ open }) {
+  return (
+    <svg
+      className={`technique-section-chevron${open ? ' open' : ''}`}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+    >
+      <path d="M4 6l4 4 4-4" />
+    </svg>
+  );
+}
+
+function DragIcon() {
+  return (
+    <svg className="drag-handle" width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+      <circle cx="5" cy="3" r="1.2" />
+      <circle cx="11" cy="3" r="1.2" />
+      <circle cx="5" cy="8" r="1.2" />
+      <circle cx="11" cy="8" r="1.2" />
+      <circle cx="5" cy="13" r="1.2" />
+      <circle cx="11" cy="13" r="1.2" />
+    </svg>
+  );
+}
+
+// ─── Reusable Field Components ───
 
 const SelectField = React.memo(function SelectField({ id, label, value, options, onChange }) {
   return (
@@ -92,6 +212,161 @@ const ToggleField = React.memo(function ToggleField({ id, label, checked, onChan
   );
 });
 
+// ─── Key Chip Selector ───
+
+const ALL_MAJOR_KEYS = KEY_OPTIONS.filter((k) => k.majorKey).map((k) => k.value);
+const ALL_MINOR_KEYS = KEY_OPTIONS.filter((k) => k.minorKey).map((k) => k.value);
+
+const KeyChipSelector = React.memo(function KeyChipSelector({ allKeys, selectedKeys, onToggle, onSelectAll, onSelectNone }) {
+  return (
+    <div>
+      <div className="key-chips">
+        {allKeys.map((key) => (
+          <button
+            key={key}
+            type="button"
+            className={`key-chip${selectedKeys.has(key) ? ' active' : ''}`}
+            onClick={() => onToggle(key)}
+          >
+            {key}
+          </button>
+        ))}
+      </div>
+      <div className="key-chip-actions">
+        <button type="button" className="key-chip-action" onClick={onSelectAll}>Select All</button>
+        <button type="button" className="key-chip-action" onClick={onSelectNone}>Select None</button>
+      </div>
+    </div>
+  );
+});
+
+// ─── Technique Section (Custom mode expandable) ───
+
+const CUSTOM_SECTIONS = [
+  { id: 'scales', label: 'Scales', settingKey: 'includeScales' },
+  { id: 'triads', label: 'Triads', settingKey: 'includeTriads' },
+  { id: 'sevenths', label: '7th Chords', settingKey: 'includeSevenths' },
+  { id: 'arpeggios', label: 'Arpeggios', settingKey: 'includeArpeggios' },
+];
+
+function TechniqueSection({
+  section,
+  enabled,
+  expanded,
+  onToggle,
+  onExpandToggle,
+  settings,
+  onSettingChange,
+  selectedMajorKeys,
+  selectedMinorKeys,
+  onMajorKeyToggle,
+  onMinorKeyToggle,
+  onSelectAllMajor,
+  onSelectNoneMajor,
+  onSelectAllMinor,
+  onSelectNoneMinor,
+  dragHandlers,
+}) {
+  return (
+    <div
+      className={`technique-section${dragHandlers?.isDragging ? ' dragging' : ''}`}
+      draggable
+      onDragStart={dragHandlers?.onDragStart}
+      onDragOver={dragHandlers?.onDragOver}
+      onDragEnd={dragHandlers?.onDragEnd}
+      onDrop={dragHandlers?.onDrop}
+    >
+      <div className="technique-section-header">
+        <DragIcon />
+        <input
+          type="checkbox"
+          className="technique-section-toggle"
+          checked={enabled}
+          onChange={(e) => { e.stopPropagation(); onToggle(); }}
+        />
+        <span className="technique-section-title" onClick={onExpandToggle}>{section.label}</span>
+        <span onClick={onExpandToggle}>
+          <ChevronIcon open={expanded} />
+        </span>
+      </div>
+      {expanded && (
+        <div className="technique-section-body">
+          <p className="section-label">Major Keys</p>
+          <KeyChipSelector
+            allKeys={ALL_MAJOR_KEYS}
+            selectedKeys={selectedMajorKeys}
+            onToggle={onMajorKeyToggle}
+            onSelectAll={onSelectAllMajor}
+            onSelectNone={onSelectNoneMajor}
+          />
+          <p className="section-label">Minor Keys</p>
+          <KeyChipSelector
+            allKeys={ALL_MINOR_KEYS}
+            selectedKeys={selectedMinorKeys}
+            onToggle={onMinorKeyToggle}
+            onSelectAll={onSelectAllMinor}
+            onSelectNone={onSelectNoneMinor}
+          />
+          {section.id === 'triads' && (
+            <div className="section-select-row">
+              <label>Presentation</label>
+              <select
+                value={settings.triadPresentation}
+                onChange={(e) => onSettingChange('triadPresentation', e.target.value)}
+              >
+                {chordPresentationOptions.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {section.id === 'sevenths' && (
+            <div className="section-select-row">
+              <label>Presentation</label>
+              <select
+                value={settings.seventhPresentation}
+                onChange={(e) => onSettingChange('seventhPresentation', e.target.value)}
+              >
+                {chordPresentationOptions.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {section.id === 'arpeggios' && (
+            <div className="section-select-row">
+              <label>Presentation</label>
+              <select
+                value={settings.arpeggioPresentation}
+                onChange={(e) => onSettingChange('arpeggioPresentation', e.target.value)}
+              >
+                {arpeggioPresentationOptions.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {section.id === 'scales' && (
+            <div className="section-select-row">
+              <label>Scale octaves</label>
+              <select
+                value={settings.octaves}
+                onChange={(e) => onSettingChange('octaves', Number(e.target.value))}
+              >
+                {octaveOptions.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Collection Entry (memoized for performance) ───
+
 const CollectionEntry = React.memo(function CollectionEntry({ entry, isRendering }) {
   return (
     <section className="collection-score" aria-label={entry.title}>
@@ -111,8 +386,45 @@ const CollectionEntry = React.memo(function CollectionEntry({ entry, isRendering
   );
 });
 
+// ─── Main Component ───
+
 export default function TechniqueCollectionBuilder() {
-  const [pendingSettings, setPendingSettings] = useState(DEFAULT_COLLECTION_SETTINGS);
+  const [activePreset, setActivePreset] = useState(PRESETS.BEGINNER);
+  const [sharedSettings, setSharedSettings] = useState({
+    keyOrder: KEY_ORDERS.CHROMATIC,
+    renderMode: RENDER_MODES.KEY_SIGNATURE,
+    showFingerings: true,
+    showDetails: false,
+    hand: HANDS.TOGETHER,
+    direction: DIRECTIONS.BOTH,
+    duration: 8,
+    displayScale: 1,
+    pairRelativeKeys: false,
+  });
+  const [customSettings, setCustomSettings] = useState({
+    ...DEFAULT_COLLECTION_SETTINGS,
+    includeScales: true,
+    includeTriads: false,
+    includeSevenths: false,
+    includeArpeggios: false,
+  });
+  const [customSectionOrder, setCustomSectionOrder] = useState(
+    CUSTOM_SECTIONS.map((s) => s.id),
+  );
+  const [expandedSections, setExpandedSections] = useState(new Set());
+  const [customMajorKeys, setCustomMajorKeys] = useState({
+    scales: new Set(ALL_MAJOR_KEYS),
+    triads: new Set(ALL_MAJOR_KEYS),
+    sevenths: new Set(ALL_MAJOR_KEYS),
+    arpeggios: new Set(ALL_MAJOR_KEYS),
+  });
+  const [customMinorKeys, setCustomMinorKeys] = useState({
+    scales: new Set(ALL_MINOR_KEYS),
+    triads: new Set(ALL_MINOR_KEYS),
+    sevenths: new Set(ALL_MINOR_KEYS),
+    arpeggios: new Set(ALL_MINOR_KEYS),
+  });
+
   const [committedSettings, setCommittedSettings] = useState(null);
   const [hasPendingChanges, setHasPendingChanges] = useState(true);
   const [entryResults, setEntryResults] = useState([]);
@@ -120,17 +432,38 @@ export default function TechniqueCollectionBuilder() {
   const [isRendering, setIsRendering] = useState(false);
   const renderId = useRef(0);
   const resultCache = useRef(new Map());
+  const dragItem = useRef(null);
+
+  // Build effective settings from preset + shared
+  const pendingSettings = useMemo(() => {
+    if (activePreset === PRESETS.CUSTOM) {
+      return {
+        ...DEFAULT_COLLECTION_SETTINGS,
+        ...customSettings,
+        ...sharedSettings,
+        title: customSettings.title || 'Custom Technique Collection',
+      };
+    }
+    return presetToSettings(activePreset, sharedSettings);
+  }, [activePreset, sharedSettings, customSettings]);
 
   const document = useMemo(
     () => committedSettings ? buildTechniqueCollectionDocument(committedSettings) : null,
     [committedSettings],
   );
 
-  const updateSetting = useCallback((key, value) => {
-    setPendingSettings((current) => ({
-      ...current,
-      [key]: value,
-    }));
+  const updateShared = useCallback((key, value) => {
+    setSharedSettings((c) => ({ ...c, [key]: value }));
+    setHasPendingChanges(true);
+  }, []);
+
+  const updateCustom = useCallback((key, value) => {
+    setCustomSettings((c) => ({ ...c, [key]: value }));
+    setHasPendingChanges(true);
+  }, []);
+
+  const handlePresetChange = useCallback((preset) => {
+    setActivePreset(preset);
     setHasPendingChanges(true);
   }, []);
 
@@ -150,11 +483,89 @@ export default function TechniqueCollectionBuilder() {
     window.URL.revokeObjectURL(url);
   }, [document]);
 
+  // Drag handlers
+  const handleDragStart = useCallback((e, sectionId) => {
+    dragItem.current = sectionId;
+    e.dataTransfer.effectAllowed = 'move';
+  }, []);
+
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  }, []);
+
+  const handleDrop = useCallback((e, targetId) => {
+    e.preventDefault();
+    const sourceId = dragItem.current;
+    if (!sourceId || sourceId === targetId) return;
+    setCustomSectionOrder((order) => {
+      const next = [...order];
+      const fromIndex = next.indexOf(sourceId);
+      const toIndex = next.indexOf(targetId);
+      if (fromIndex === -1 || toIndex === -1) return order;
+      next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, sourceId);
+      return next;
+    });
+    setHasPendingChanges(true);
+  }, []);
+
+  const handleDragEnd = useCallback(() => {
+    dragItem.current = null;
+  }, []);
+
+  // Key toggling for custom mode  
+  const toggleMajorKey = useCallback((sectionId, key) => {
+    setCustomMajorKeys((c) => {
+      const next = new Set(c[sectionId]);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return { ...c, [sectionId]: next };
+    });
+    setHasPendingChanges(true);
+  }, []);
+
+  const toggleMinorKey = useCallback((sectionId, key) => {
+    setCustomMinorKeys((c) => {
+      const next = new Set(c[sectionId]);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return { ...c, [sectionId]: next };
+    });
+    setHasPendingChanges(true);
+  }, []);
+
+  const selectAllMajor = useCallback((sectionId) => {
+    setCustomMajorKeys((c) => ({ ...c, [sectionId]: new Set(ALL_MAJOR_KEYS) }));
+    setHasPendingChanges(true);
+  }, []);
+
+  const selectNoneMajor = useCallback((sectionId) => {
+    setCustomMajorKeys((c) => ({ ...c, [sectionId]: new Set() }));
+    setHasPendingChanges(true);
+  }, []);
+
+  const selectAllMinor = useCallback((sectionId) => {
+    setCustomMinorKeys((c) => ({ ...c, [sectionId]: new Set(ALL_MINOR_KEYS) }));
+    setHasPendingChanges(true);
+  }, []);
+
+  const selectNoneMinor = useCallback((sectionId) => {
+    setCustomMinorKeys((c) => ({ ...c, [sectionId]: new Set() }));
+    setHasPendingChanges(true);
+  }, []);
+
+  const toggleExpanded = useCallback((sectionId) => {
+    setExpandedSections((c) => {
+      const next = new Set(c);
+      if (next.has(sectionId)) next.delete(sectionId); else next.add(sectionId);
+      return next;
+    });
+  }, []);
+
+  // Cache management
   function cacheResult(result) {
     if (resultCache.current.has(result.id)) {
       resultCache.current.delete(result.id);
     }
-
     resultCache.current.set(result.id, result);
     if (resultCache.current.size > MAX_RESULT_CACHE_ENTRIES) {
       resultCache.current.delete(resultCache.current.keys().next().value);
@@ -215,7 +626,6 @@ export default function TechniqueCollectionBuilder() {
         window.clearTimeout(progressTimer);
         progressTimer = 0;
       }
-
       setRenderedTechniqueCount(completedTechniqueCount);
     }
 
@@ -230,7 +640,6 @@ export default function TechniqueCollectionBuilder() {
           signal: abortController.signal,
           onResult: (_, result) => {
             if (renderId.current !== id) return;
-
             const rendered = {
               id: result.id,
               title: result.title,
@@ -260,7 +669,6 @@ export default function TechniqueCollectionBuilder() {
         }
       } catch (nextError) {
         if (nextError?.name === 'AbortError' || renderId.current !== id) return;
-
         flushRenderProgress();
         setEntryResults((current) => current.map((entry) => (
           entry.status === 'pending' && entriesToRender.some((nextEntry) => nextEntry.id === entry.id)
@@ -281,9 +689,7 @@ export default function TechniqueCollectionBuilder() {
 
     return () => {
       window.clearTimeout(timer);
-      if (progressTimer) {
-        window.clearTimeout(progressTimer);
-      }
+      if (progressTimer) window.clearTimeout(progressTimer);
       abortController.abort();
     };
   }, [document]);
@@ -293,181 +699,189 @@ export default function TechniqueCollectionBuilder() {
     0,
   );
   const visibleCompletedCount = isRendering ? renderedTechniqueCount : completedCount;
+  const totalTechniques = document?.techniqueCount ?? 0;
+  const progressPercent = totalTechniques > 0 ? Math.round((visibleCompletedCount / totalTechniques) * 100) : 0;
+
+  const displayTitle = committedSettings
+    ? document?.title
+    : pendingSettings.title || DEFAULT_COLLECTION_SETTINGS.title;
+
+  const orderedSections = customSectionOrder
+    .map((id) => CUSTOM_SECTIONS.find((s) => s.id === id))
+    .filter(Boolean);
 
   return (
     <main className="technique-shell">
       <section className="workbench" aria-label="Technique collection generator">
         <div className="controls">
-          <div className="brandline">
-            <p className="eyebrow">Technique Collection Generator</p>
-            <h1>{committedSettings ? document.title : (pendingSettings.title || DEFAULT_COLLECTION_SETTINGS.title)}</h1>
-            <a className="text-link" href="/single-technique">
-              Single technique
-            </a>
-          </div>
+          <div className="controls-inner">
+            <div className="brandline">
+              <p className="eyebrow">Technique Collection</p>
+              <h1>{displayTitle}</h1>
+              <a className="text-link" href="/single-technique">Single technique →</a>
+            </div>
 
-          <div className="control-grid">
-            <TextField
-              id="collectionTitle"
-              label="Title"
-              value={pendingSettings.title}
-              onChange={(value) => updateSetting('title', value)}
-            />
-            <SelectField
-              id="keyOrder"
-              label="Key order"
-              value={pendingSettings.keyOrder}
-              options={keyOrderOptions}
-              onChange={(value) => updateSetting('keyOrder', value)}
-            />
-            <SelectField
-              id="hand"
-              label="Hand"
-              value={pendingSettings.hand}
-              options={handOptions}
-              onChange={(value) => updateSetting('hand', value)}
-            />
-            <SelectField
-              id="direction"
-              label="Direction"
-              value={pendingSettings.direction}
-              options={directionOptions}
-              onChange={(value) => updateSetting('direction', value)}
-            />
-            <SelectField
-              id="duration"
-              label="Duration"
-              value={pendingSettings.duration}
-              options={DURATION_OPTIONS}
-              onChange={(value) => updateSetting('duration', Number(value))}
-            />
-            <SelectField
-              id="renderMode"
-              label="Notation"
-              value={pendingSettings.renderMode}
-              options={renderModeOptions}
-              onChange={(value) => updateSetting('renderMode', value)}
-            />
-            <SelectField
-              id="displayScale"
-              label="Display size"
-              value={pendingSettings.displayScale}
-              options={DISPLAY_SIZE_OPTIONS}
-              onChange={(value) => updateSetting('displayScale', Number(value))}
-            />
-            {pendingSettings.includeScales && (
-              <SelectField
-                id="octaves"
-                label="Scale octaves"
-                value={pendingSettings.octaves}
-                options={octaveOptions}
-                onChange={(value) => updateSetting('octaves', Number(value))}
-              />
-            )}
-          </div>
+            {/* Preset Tabs */}
+            <div className="preset-tabs">
+              {presetTabs.map((tab) => (
+                <button
+                  key={tab.value}
+                  type="button"
+                  className={`preset-tab${activePreset === tab.value ? ' active' : ''}`}
+                  onClick={() => handlePresetChange(tab.value)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
 
-          <div className="toggles section-toggles">
-            <ToggleField
-              id="pairRelativeKeys"
-              label="Pair relative keys"
-              checked={pendingSettings.pairRelativeKeys}
-              onChange={(value) => updateSetting('pairRelativeKeys', value)}
-            />
-            <ToggleField
-              id="includeScales"
-              label="Scales"
-              checked={pendingSettings.includeScales}
-              onChange={(value) => updateSetting('includeScales', value)}
-            />
-            <ToggleField
-              id="includeTriads"
-              label="Triads"
-              checked={pendingSettings.includeTriads}
-              onChange={(value) => updateSetting('includeTriads', value)}
-            />
-            <ToggleField
-              id="includeSevenths"
-              label="7th chords"
-              checked={pendingSettings.includeSevenths}
-              onChange={(value) => updateSetting('includeSevenths', value)}
-            />
-            <ToggleField
-              id="includeArpeggios"
-              label="Arpeggios"
-              checked={pendingSettings.includeArpeggios}
-              onChange={(value) => updateSetting('includeArpeggios', value)}
-            />
-            <ToggleField
-              id="fingerings"
-              label="Fingerings"
-              checked={pendingSettings.showFingerings}
-              onChange={(value) => updateSetting('showFingerings', value)}
-            />
-            <ToggleField
-              id="showDetails"
-              label="Show details"
-              checked={pendingSettings.showDetails}
-              onChange={(value) => updateSetting('showDetails', value)}
-            />
-          </div>
+            {/* Shared Controls */}
+            <p className="section-label">Settings</p>
+            <div className="control-grid">
+              <SelectField
+                id="keyOrder"
+                label="Key order"
+                value={sharedSettings.keyOrder}
+                options={keyOrderOptions}
+                onChange={(v) => updateShared('keyOrder', v)}
+              />
+              <SelectField
+                id="renderMode"
+                label="Notation"
+                value={sharedSettings.renderMode}
+                options={renderModeOptions}
+                onChange={(v) => updateShared('renderMode', v)}
+              />
+              <SelectField
+                id="hand"
+                label="Hand"
+                value={sharedSettings.hand}
+                options={handOptions}
+                onChange={(v) => updateShared('hand', v)}
+              />
+              <SelectField
+                id="direction"
+                label="Direction"
+                value={sharedSettings.direction}
+                options={directionOptions}
+                onChange={(v) => updateShared('direction', v)}
+              />
+              <SelectField
+                id="duration"
+                label="Duration"
+                value={sharedSettings.duration}
+                options={DURATION_OPTIONS}
+                onChange={(v) => updateShared('duration', Number(v))}
+              />
+              <SelectField
+                id="displayScale"
+                label="Display size"
+                value={sharedSettings.displayScale}
+                options={DISPLAY_SIZE_OPTIONS}
+                onChange={(v) => updateShared('displayScale', Number(v))}
+              />
+            </div>
 
-          <div className="control-grid compact-grid">
-            {pendingSettings.includeTriads && (
-              <SelectField
-                id="triadPresentation"
-                label="Triads"
-                value={pendingSettings.triadPresentation}
-                options={chordPresentationOptions}
-                onChange={(value) => updateSetting('triadPresentation', value)}
+            <div className="toggles">
+              <ToggleField
+                id="fingerings"
+                label="Fingerings"
+                checked={sharedSettings.showFingerings}
+                onChange={(v) => updateShared('showFingerings', v)}
               />
-            )}
-            {pendingSettings.includeSevenths && (
-              <SelectField
-                id="seventhPresentation"
-                label="7th chords"
-                value={pendingSettings.seventhPresentation}
-                options={chordPresentationOptions}
-                onChange={(value) => updateSetting('seventhPresentation', value)}
+              <ToggleField
+                id="showDetails"
+                label="Show details"
+                checked={sharedSettings.showDetails}
+                onChange={(v) => updateShared('showDetails', v)}
               />
-            )}
-            {pendingSettings.includeArpeggios && (
-              <SelectField
-                id="arpeggioPresentation"
-                label="Arpeggios"
-                value={pendingSettings.arpeggioPresentation}
-                options={arpeggioPresentationOptions}
-                onChange={(value) => updateSetting('arpeggioPresentation', value)}
+              <ToggleField
+                id="pairRelativeKeys"
+                label="Pair relative keys"
+                checked={sharedSettings.pairRelativeKeys}
+                onChange={(v) => updateShared('pairRelativeKeys', v)}
               />
-            )}
-          </div>
+            </div>
 
-          <div className="action-row">
-            <button type="button" onClick={() => window.print()} disabled={isRendering || !committedSettings}>
-              Print
-            </button>
-            <button type="button" onClick={exportTypst} disabled={!committedSettings}>
-              Export Typst
-            </button>
-            <button type="button" onClick={handleGenerate} disabled={!hasPendingChanges}>
-              {committedSettings === null ? 'Generate' : 'Regenerate'}
-            </button>
+            {/* Custom Mode: Title + Technique Sections */}
+            {activePreset === PRESETS.CUSTOM && (
+              <>
+                <hr className="section-divider" />
+                <p className="section-label">Collection Title</p>
+                <TextField
+                  id="collectionTitle"
+                  label="Title"
+                  value={customSettings.title || ''}
+                  onChange={(v) => updateCustom('title', v)}
+                />
+                <p className="section-label">Techniques</p>
+                {orderedSections.map((section) => (
+                  <TechniqueSection
+                    key={section.id}
+                    section={section}
+                    enabled={customSettings[section.settingKey]}
+                    expanded={expandedSections.has(section.id)}
+                    onToggle={() => {
+                      updateCustom(section.settingKey, !customSettings[section.settingKey]);
+                    }}
+                    onExpandToggle={() => toggleExpanded(section.id)}
+                    settings={customSettings}
+                    onSettingChange={updateCustom}
+                    selectedMajorKeys={customMajorKeys[section.id]}
+                    selectedMinorKeys={customMinorKeys[section.id]}
+                    onMajorKeyToggle={(key) => toggleMajorKey(section.id, key)}
+                    onMinorKeyToggle={(key) => toggleMinorKey(section.id, key)}
+                    onSelectAllMajor={() => selectAllMajor(section.id)}
+                    onSelectNoneMajor={() => selectNoneMajor(section.id)}
+                    onSelectAllMinor={() => selectAllMinor(section.id)}
+                    onSelectNoneMinor={() => selectNoneMinor(section.id)}
+                    dragHandlers={{
+                      onDragStart: (e) => handleDragStart(e, section.id),
+                      onDragOver: handleDragOver,
+                      onDrop: (e) => handleDrop(e, section.id),
+                      onDragEnd: handleDragEnd,
+                      isDragging: dragItem.current === section.id,
+                    }}
+                  />
+                ))}
+              </>
+            )}
+
+            {/* Actions */}
+            <div className="action-row">
+              <button type="button" onClick={() => window.print()} disabled={isRendering || !committedSettings}>
+                Print
+              </button>
+              <button type="button" onClick={exportTypst} disabled={!committedSettings}>
+                Export
+              </button>
+              <button type="button" onClick={handleGenerate} disabled={!hasPendingChanges}>
+                {committedSettings === null ? 'Generate' : 'Regenerate'}
+              </button>
+            </div>
           </div>
         </div>
 
         <div className="score-pane" aria-live="polite">
           <div className="score-toolbar">
-            <span>
+            <span className="render-status">
+              {isRendering && <span className="spinner" />}
               {isRendering
-                ? `Rendering ${visibleCompletedCount}/${document?.techniqueCount ?? 0}`
+                ? `Rendering ${visibleCompletedCount} / ${totalTechniques}`
                 : committedSettings
-                  ? `${document.techniqueCount} techniques`
+                  ? `${totalTechniques} techniques`
                   : 'Not generated'}
             </span>
             <span>Scorify + Typst WASM</span>
           </div>
+          {isRendering && (
+            <div className="render-progress">
+              <div className="render-progress-bar" style={{ width: `${progressPercent}%` }} />
+            </div>
+          )}
           {!committedSettings ? (
             <div className="score-output collection-output">
-              <p className="empty-output">Configure your settings and click Generate.</p>
+              <p className="empty-output">Choose a preset and click Generate.</p>
             </div>
           ) : (
             <div className={`score-output collection-output${isRendering ? ' is-rendering' : ''}`}>

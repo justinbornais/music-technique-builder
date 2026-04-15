@@ -144,11 +144,12 @@ export default function TechniqueBuilder() {
     <main className="technique-shell">
       <section className="workbench" aria-label="Technique builder">
         <div className="controls">
+          <div className="controls-inner">
           <div className="brandline">
             <p className="eyebrow">Single Technique</p>
             <h1>{document?.title ?? 'Technique Builder'}</h1>
             <a className="text-link" href="/">
-              Technique collection
+              Technique collection →
             </a>
           </div>
 
@@ -267,11 +268,15 @@ export default function TechniqueBuilder() {
               {committedSettings === null ? 'Generate' : 'Regenerate'}
             </button>
           </div>
+          </div>
         </div>
 
         <div className="score-pane" aria-live="polite">
           <div className="score-toolbar">
-            <span>{committedSettings === null ? 'Not generated' : isRendering ? 'Rendering with Typst' : 'Ready'}</span>
+            <span className="render-status">
+              {committedSettings !== null && isRendering && <span className="spinner" />}
+              {committedSettings === null ? 'Not generated' : isRendering ? 'Rendering with Typst' : 'Ready'}
+            </span>
             <span>Scorify + Typst WASM</span>
           </div>
           {committedSettings === null && (
