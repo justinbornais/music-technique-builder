@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ARPEGGIO_PRESENTATION,
   CHORD_PRESENTATION,
@@ -54,7 +54,7 @@ const octaveOptions = [
   { value: 2, label: '2 octaves' },
 ];
 
-function SelectField({ id, label, value, options, onChange }) {
+const SelectField = React.memo(function SelectField({ id, label, value, options, onChange }) {
   return (
     <label className="field" htmlFor={id}>
       <span>{label}</span>
@@ -67,18 +67,18 @@ function SelectField({ id, label, value, options, onChange }) {
       </select>
     </label>
   );
-}
+});
 
-function TextField({ id, label, value, onChange }) {
+const TextField = React.memo(function TextField({ id, label, value, onChange }) {
   return (
     <label className="field field-wide" htmlFor={id}>
       <span>{label}</span>
       <input id={id} value={value} onChange={(event) => onChange(event.target.value)} />
     </label>
   );
-}
+});
 
-function ToggleField({ id, label, checked, onChange }) {
+const ToggleField = React.memo(function ToggleField({ id, label, checked, onChange }) {
   return (
     <label className="toggle" htmlFor={id}>
       <input
@@ -90,7 +90,26 @@ function ToggleField({ id, label, checked, onChange }) {
       <span>{label}</span>
     </label>
   );
-}
+});
+
+const CollectionEntry = React.memo(function CollectionEntry({ entry, isRendering }) {
+  return (
+    <section className="collection-score" aria-label={entry.title}>
+      {entry.status === 'pending' && (
+        <div className="score-placeholder">Rendering {entry.title}</div>
+      )}
+      {isRendering && entry.status !== 'pending' && !entry.error && !entry.svg && (
+        <div className="score-placeholder">Rendered {entry.title}</div>
+      )}
+      {entry.error && (
+        <pre className="error-output inline-error">{entry.error}</pre>
+      )}
+      {entry.svg && (
+        <div dangerouslySetInnerHTML={{ __html: entry.svg }} />
+      )}
+    </section>
+  );
+});
 
 export default function TechniqueCollectionBuilder() {
   const [pendingSettings, setPendingSettings] = useState(DEFAULT_COLLECTION_SETTINGS);
@@ -107,20 +126,20 @@ export default function TechniqueCollectionBuilder() {
     [committedSettings],
   );
 
-  function updateSetting(key, value) {
+  const updateSetting = useCallback((key, value) => {
     setPendingSettings((current) => ({
       ...current,
       [key]: value,
     }));
     setHasPendingChanges(true);
-  }
+  }, []);
 
-  function handleGenerate() {
+  const handleGenerate = useCallback(() => {
     setCommittedSettings(pendingSettings);
     setHasPendingChanges(false);
-  }
+  }, [pendingSettings]);
 
-  function exportTypst() {
+  const exportTypst = useCallback(() => {
     if (!document) return;
     const blob = new Blob([document.source], { type: 'text/plain;charset=utf-8' });
     const url = window.URL.createObjectURL(blob);
@@ -129,7 +148,7 @@ export default function TechniqueCollectionBuilder() {
     link.download = `${document.title.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'technique-collection'}.typ`;
     link.click();
     window.URL.revokeObjectURL(url);
-  }
+  }, [document]);
 
   function cacheResult(result) {
     if (resultCache.current.has(result.id)) {
@@ -461,20 +480,7 @@ export default function TechniqueCollectionBuilder() {
                 </div>
               )}
               {entryResults.map((entry) => (
-                <section className="collection-score" key={entry.id} aria-label={entry.title}>
-                  {entry.status === 'pending' && (
-                    <div className="score-placeholder">Rendering {entry.title}</div>
-                  )}
-                  {isRendering && entry.status !== 'pending' && !entry.error && !entry.svg && (
-                    <div className="score-placeholder">Rendered {entry.title}</div>
-                  )}
-                  {entry.error && (
-                    <pre className="error-output inline-error">{entry.error}</pre>
-                  )}
-                  {entry.svg && (
-                    <div dangerouslySetInnerHTML={{ __html: entry.svg }} />
-                  )}
-                </section>
+                <CollectionEntry key={entry.id} entry={entry} isRendering={isRendering} />
               ))}
             </div>
           )}

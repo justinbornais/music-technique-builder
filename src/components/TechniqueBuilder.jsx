@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ARPEGGIO_OPTIONS,
   DEFAULT_SETTINGS,
@@ -45,7 +45,7 @@ const octaveOptions = [
   { value: 2, label: '2 octaves' },
 ];
 
-function SelectField({ id, label, value, options, onChange }) {
+const SelectField = React.memo(function SelectField({ id, label, value, options, onChange }) {
   return (
     <label className="field" htmlFor={id}>
       <span>{label}</span>
@@ -58,9 +58,9 @@ function SelectField({ id, label, value, options, onChange }) {
       </select>
     </label>
   );
-}
+});
 
-function ToggleField({ id, label, checked, onChange }) {
+const ToggleField = React.memo(function ToggleField({ id, label, checked, onChange }) {
   return (
     <label className="toggle" htmlFor={id}>
       <input
@@ -72,7 +72,7 @@ function ToggleField({ id, label, checked, onChange }) {
       <span>{label}</span>
     </label>
   );
-}
+});
 
 export default function TechniqueBuilder() {
   const [pendingSettings, setPendingSettings] = useState(DEFAULT_SETTINGS);
@@ -92,18 +92,18 @@ export default function TechniqueBuilder() {
     [committedSettings],
   );
 
-  function updateSetting(key, value) {
+  const updateSetting = useCallback((key, value) => {
     setPendingSettings((current) => ({
       ...current,
       [key]: value,
     }));
     setHasPendingChanges(true);
-  }
+  }, []);
 
-  function handleGenerate() {
+  const handleGenerate = useCallback(() => {
     setCommittedSettings(pendingSettings);
     setHasPendingChanges(false);
-  }
+  }, [pendingSettings]);
 
   useEffect(() => {
     void warmTypstRenderer();
