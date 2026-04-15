@@ -3,6 +3,7 @@ import { TypstSnippet } from '@myriaddreamin/typst.ts/contrib/snippet';
 import compilerWasmUrl from '@myriaddreamin/typst-ts-web-compiler/pkg/typst_ts_web_compiler_bg.wasm?url';
 import rendererWasmUrl from '@myriaddreamin/typst-ts-renderer/pkg/typst_ts_renderer_bg.wasm?url';
 import bravuraFontUrl from '../typst/scorify/fonts/Bravura.otf?url';
+import scorifyWasmUrl from '../typst/scorify/scorify_wasm.wasm?url';
 
 const scorifySources = import.meta.glob('../typst/scorify/**/*.{typ,json}', {
   query: '?raw',
@@ -11,8 +12,10 @@ const scorifySources = import.meta.glob('../typst/scorify/**/*.{typ,json}', {
 });
 
 let typstReady;
+let scorifyWasmBytes;
 
 const MAIN_FILE_PATH = '/worker-technique.typ';
+const SCORIFY_WASM_PATH = '/scorify/scorify_wasm.wasm';
 const SVG_DATA_SELECTION = {
   body: true,
   defs: true,
@@ -22,6 +25,29 @@ const SVG_DATA_SELECTION = {
 
 function scorifyVirtualPath(path) {
   return path.replace(/^\.\.\/typst\/scorify\//, '/scorify/');
+}
+
+async function fetchBinary(url) {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to load ${url}: ${response.status} ${response.statusText}`);
+  }
+
+  return new Uint8Array(await response.arrayBuffer());
+}
+
+async function loadScorifyWasmBytes() {
+  if (!scorifyWasmBytes) {
+    scorifyWasmBytes = fetchBinary(scorifyWasmUrl);
+  }
+
+  return scorifyWasmBytes;
+}
+
+function addScorifySources(compiler) {
+  for (const [path, content] of Object.entries(scorifySources)) {
+    compiler.addSource(scorifyVirtualPath(path), content);
+  }
 }
 
 async function initializeTypst() {
@@ -38,19 +64,26 @@ async function initializeTypst() {
         TypstSnippet.preloadFontFromUrl(bravuraFontUrl),
       );
 
-      for (const [path, content] of Object.entries(scorifySources)) {
-        await $typst.addSource(scorifyVirtualPath(path), content);
-      }
+      await $typst.mapShadow(SCORIFY_WASM_PATH, await loadScorifyWasmBytes());
+      addScorifySources(await $typst.getCompiler());
     })();
   }
 
   return typstReady;
 }
 
-async function renderTypstSvg(source) {
+async function prepareCompilerForRender(source) {
   await initializeTypst();
 
-  await $typst.addSource(MAIN_FILE_PATH, source);
+  const compiler = await $typst.getCompiler();
+  await compiler.reset();
+  await compiler.mapShadow(SCORIFY_WASM_PATH, await loadScorifyWasmBytes());
+  addScorifySources(compiler);
+  compiler.addSource(MAIN_FILE_PATH, source);
+}
+
+async function renderTypstSvg(source) {
+  await prepareCompilerForRender(source);
 
   const svg = await $typst.svg({
     mainFilePath: MAIN_FILE_PATH,

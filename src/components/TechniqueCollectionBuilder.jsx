@@ -47,6 +47,8 @@ const arpeggioPresentationOptions = [
   { value: ARPEGGIO_PRESENTATION.ROOT_AND_INVERSIONS, label: 'Root and inversions' },
 ];
 
+const MAX_RESULT_CACHE_ENTRIES = 200;
+
 const octaveOptions = [
   { value: 1, label: '1 octave' },
   { value: 2, label: '2 octaves' },
@@ -95,6 +97,7 @@ export default function TechniqueCollectionBuilder() {
   const [committedSettings, setCommittedSettings] = useState(null);
   const [hasPendingChanges, setHasPendingChanges] = useState(true);
   const [entryResults, setEntryResults] = useState([]);
+  const [renderedTechniqueCount, setRenderedTechniqueCount] = useState(0);
   const [isRendering, setIsRendering] = useState(false);
   const renderId = useRef(0);
   const resultCache = useRef(new Map());
@@ -128,6 +131,17 @@ export default function TechniqueCollectionBuilder() {
     window.URL.revokeObjectURL(url);
   }
 
+  function cacheResult(result) {
+    if (resultCache.current.has(result.id)) {
+      resultCache.current.delete(result.id);
+    }
+
+    resultCache.current.set(result.id, result);
+    if (resultCache.current.size > MAX_RESULT_CACHE_ENTRIES) {
+      resultCache.current.delete(resultCache.current.keys().next().value);
+    }
+  }
+
   useEffect(() => {
     void warmTypstRenderer({ main: false, workers: true });
   }, []);
@@ -135,6 +149,7 @@ export default function TechniqueCollectionBuilder() {
   useEffect(() => {
     if (!document) {
       setEntryResults([]);
+      setRenderedTechniqueCount(0);
       setIsRendering(false);
       return undefined;
     }
@@ -152,9 +167,15 @@ export default function TechniqueCollectionBuilder() {
         status: 'pending',
       }
     ));
+    const activeResults = new Map(visibleResults.map((entry) => [entry.id, entry]));
     const entriesToRender = document.renderEntries.filter((entry) => !resultCache.current.has(entry.id));
+    const cachedTechniqueCount = visibleResults.reduce(
+      (count, entry) => count + (entry.status === 'pending' ? 0 : entry.techniqueCount ?? 1),
+      0,
+    );
 
     setEntryResults(visibleResults);
+    setRenderedTechniqueCount(cachedTechniqueCount);
     setIsRendering(entriesToRender.length > 0);
 
     if (document.entries.length === 0) {
@@ -167,6 +188,23 @@ export default function TechniqueCollectionBuilder() {
     }
 
     const abortController = new AbortController();
+    let completedTechniqueCount = cachedTechniqueCount;
+    let progressTimer = 0;
+
+    function flushRenderProgress() {
+      if (progressTimer) {
+        window.clearTimeout(progressTimer);
+        progressTimer = 0;
+      }
+
+      setRenderedTechniqueCount(completedTechniqueCount);
+    }
+
+    function scheduleProgressFlush() {
+      if (progressTimer) return;
+      progressTimer = window.setTimeout(flushRenderProgress, 80);
+    }
+
     const timer = window.setTimeout(async () => {
       try {
         await renderTypstSvgBatch(entriesToRender, {
@@ -182,28 +220,29 @@ export default function TechniqueCollectionBuilder() {
               error: result.error,
               status: result.status,
             };
-            resultCache.current.set(result.id, rendered);
-
-            setEntryResults((current) => current.map((entry) => (
-              entry.id === result.id
-                ? {
-                  ...entry,
-                  techniqueCount: result.techniqueCount,
-                  svg: result.svg,
-                  error: result.error,
-                  status: result.status,
-                }
-                : entry
-            )));
+            activeResults.set(result.id, rendered);
+            cacheResult(rendered);
+            completedTechniqueCount += result.techniqueCount ?? 1;
+            scheduleProgressFlush();
           },
         });
 
         if (renderId.current === id) {
+          flushRenderProgress();
+          setEntryResults(document.renderEntries.map((entry) => activeResults.get(entry.id) ?? {
+            id: entry.id,
+            title: entry.title,
+            techniqueCount: entry.techniqueCount,
+            svg: '',
+            error: '',
+            status: 'pending',
+          }));
           setIsRendering(false);
         }
       } catch (nextError) {
         if (nextError?.name === 'AbortError' || renderId.current !== id) return;
 
+        flushRenderProgress();
         setEntryResults((current) => current.map((entry) => (
           entry.status === 'pending' && entriesToRender.some((nextEntry) => nextEntry.id === entry.id)
             ? (() => {
@@ -212,7 +251,7 @@ export default function TechniqueCollectionBuilder() {
                 error: nextError instanceof Error ? nextError.message : String(nextError),
                 status: 'error',
               };
-              resultCache.current.set(entry.id, rendered);
+              cacheResult(rendered);
               return rendered;
             })()
             : entry
@@ -223,6 +262,9 @@ export default function TechniqueCollectionBuilder() {
 
     return () => {
       window.clearTimeout(timer);
+      if (progressTimer) {
+        window.clearTimeout(progressTimer);
+      }
       abortController.abort();
     };
   }, [document]);
@@ -231,6 +273,7 @@ export default function TechniqueCollectionBuilder() {
     (count, entry) => count + (entry.status === 'pending' ? 0 : entry.techniqueCount ?? 1),
     0,
   );
+  const visibleCompletedCount = isRendering ? renderedTechniqueCount : completedCount;
 
   return (
     <main className="technique-shell">
@@ -341,6 +384,12 @@ export default function TechniqueCollectionBuilder() {
               checked={pendingSettings.showFingerings}
               onChange={(value) => updateSetting('showFingerings', value)}
             />
+            <ToggleField
+              id="showDetails"
+              label="Show details"
+              checked={pendingSettings.showDetails}
+              onChange={(value) => updateSetting('showDetails', value)}
+            />
           </div>
 
           <div className="control-grid compact-grid">
@@ -390,7 +439,7 @@ export default function TechniqueCollectionBuilder() {
           <div className="score-toolbar">
             <span>
               {isRendering
-                ? `Rendering ${completedCount}/${document?.entries.length ?? 0}`
+                ? `Rendering ${visibleCompletedCount}/${document?.entries.length ?? 0}`
                 : committedSettings
                   ? `${document.entries.length} techniques`
                   : 'Not generated'}
@@ -415,6 +464,9 @@ export default function TechniqueCollectionBuilder() {
                 <section className="collection-score" key={entry.id} aria-label={entry.title}>
                   {entry.status === 'pending' && (
                     <div className="score-placeholder">Rendering {entry.title}</div>
+                  )}
+                  {isRendering && entry.status !== 'pending' && !entry.error && !entry.svg && (
+                    <div className="score-placeholder">Rendered {entry.title}</div>
                   )}
                   {entry.error && (
                     <pre className="error-output inline-error">{entry.error}</pre>

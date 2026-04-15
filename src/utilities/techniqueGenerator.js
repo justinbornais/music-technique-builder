@@ -209,6 +209,7 @@ export const DEFAULT_COLLECTION_SETTINGS = {
   renderMode: RENDER_MODES.KEY_SIGNATURE,
   displayScale: 1,
   showFingerings: true,
+  showDetails: false,
   keyOrder: KEY_ORDERS.CHROMATIC,
   pairRelativeKeys: false,
   includeScales: true,
@@ -1275,7 +1276,7 @@ function scoreCallForSettings(
 
   return `#score(
   title: ${typstString(title)},
-  subtitle: ${typstString(subtitle)},
+  subtitle: ${subtitle ? typstString(subtitle) : 'none'},
   key: ${typstString(key)},
   staff-group: ${typstString(staves.length > 1 ? 'grand' : 'none')},
   staff-size: ${staffSizeForSettings(settings)}mm,
@@ -1546,18 +1547,18 @@ function typstDocument(body, options = {}) {
 ${body}`;
 }
 
-function scoreCallForEntry(entry) {
+function scoreCallForEntry(entry, options = {}) {
   return scoreCallForSettings(
     entry.settings,
     entry.title,
-    subtitleForSettings(entry.settings),
+    options.showDetails ? subtitleForSettings(entry.settings) : '',
     { compact: true },
   );
 }
 
-function sourceForEntries(entries) {
+function sourceForEntries(entries, options = {}) {
   return typstDocument(
-    entries.map(scoreCallForEntry).join('\n\n#v(2mm)\n\n'),
+    entries.map((entry) => scoreCallForEntry(entry, options)).join('\n\n#v(2mm)\n\n'),
     { compact: true },
   );
 }
@@ -1584,9 +1585,12 @@ export function buildTechniqueDocument(settings) {
 export function buildTechniqueCollectionDocument(collectionSettings) {
   const entries = collectionEntriesForSettings(collectionSettings);
   const renderEntries = [];
+  const entryOptions = {
+    showDetails: Boolean(collectionSettings.showDetails),
+  };
   for (let index = 0; index < entries.length; index += TECHNIQUES_PER_RENDER_DOCUMENT) {
     const chunk = entries.slice(index, index + TECHNIQUES_PER_RENDER_DOCUMENT);
-    const source = sourceForEntries(chunk);
+    const source = sourceForEntries(chunk, entryOptions);
     renderEntries.push({
       id: stableIdForSource(source),
       title: chunk.map((entry) => entry.title).join(' / '),
@@ -1604,7 +1608,7 @@ export function buildTechniqueCollectionDocument(collectionSettings) {
 #v(5mm)
 
 ${entries
-    .map(scoreCallForEntry)
+    .map((entry) => scoreCallForEntry(entry, entryOptions))
     .join('\n\n#v(2mm)\n\n')}`;
 
   return {
