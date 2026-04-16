@@ -126,6 +126,8 @@ export const DISPLAY_SIZE_OPTIONS = [
 ];
 
 // Fill this section with the finished fingering rules as you settle them.
+// Arpeggio entries can use the legacy hand-level shape or an inversion-level
+// shape, for example { rootPosition: arpeggioSpec(...), firstInversion: ... }.
 // The generator reads these values today, using conservative defaults so the
 // page continues to render while the full table is being authored.
 export const FINGERING_DEFINITIONS = {
@@ -429,47 +431,59 @@ function arpeggioSpec(rightFirst, rightSubsequent, leftFirst, leftSubsequent, ri
   };
 }
 
+function triadArpeggioSpec(rootPosition, firstInversion = rootPosition, secondInversion = rootPosition) {
+  return {
+    rootPosition,
+    firstInversion,
+    secondInversion,
+  };
+}
+
 function majorTriadArpeggioKeys() {
   return {
-    C: arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 4, 2], [1, 4, 2]),
-    'C#': arpeggioSpec([2, 1, 2], [4, 1, 2], [3, 1, 4], [2, 1, 4], 4, 2),
-    Db: arpeggioSpec([2, 1, 2], [4, 1, 2], [3, 1, 4], [2, 1, 4], 4, 2),
-    D: arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 3, 2], [1, 3, 2]),
-    'D#': arpeggioSpec([3, 1, 2], [4, 1, 2], [3, 1, 4], [2, 1, 4]),
-    Eb: arpeggioSpec([3, 1, 2], [4, 1, 2], [3, 1, 4], [2, 1, 4]),
-    E: arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 3, 2], [1, 3, 2]),
-    F: arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 4, 2], [1, 4, 2]),
-    'F#': arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 3, 2], [1, 3, 2]),
-    Gb: arpeggioSpec([2, 1, 2], [4, 1, 2], [3, 1, 4], [2, 1, 4]),
-    G: arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 4, 2], [1, 4, 2]),
-    'G#': arpeggioSpec([3, 1, 2], [4, 1, 2], [3, 1, 4], [2, 1, 4]),
-    Ab: arpeggioSpec([3, 1, 2], [4, 1, 2], [3, 1, 4], [2, 1, 4]),
-    A: arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 3, 2], [1, 3, 2]),
-    'A#': arpeggioSpec([3, 1, 2], [4, 1, 2], [3, 1, 4], [2, 1, 4]),
-    Bb: arpeggioSpec([3, 1, 2], [4, 1, 2], [3, 1, 4], [2, 1, 4]),
-    B: arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 3, 2], [1, 3, 2]),
-    Cb: arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 3, 2], [1, 3, 2]),
+    C: triadArpeggioSpec(
+      arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 4, 2], [1, 4, 2]),
+      arpeggioSpec([1, 2, 4], [1, 2, 4], [5, 4, 2], [1, 4, 2]),
+      arpeggioSpec([1, 2, 4], [1, 2, 4], [5, 3, 2], [1, 3, 2]),
+    ),
+    'C#': triadArpeggioSpec(arpeggioSpec([2, 1, 2], [4, 1, 2], [3, 1, 4], [2, 1, 4], 4, 2)),
+    Db: triadArpeggioSpec(arpeggioSpec([2, 1, 2], [4, 1, 2], [3, 1, 4], [2, 1, 4], 4, 2)),
+    D: triadArpeggioSpec(arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 3, 2], [1, 3, 2])),
+    'D#': triadArpeggioSpec(arpeggioSpec([3, 1, 2], [4, 1, 2], [3, 1, 4], [2, 1, 4])),
+    Eb: triadArpeggioSpec(arpeggioSpec([3, 1, 2], [4, 1, 2], [3, 1, 4], [2, 1, 4])),
+    E: triadArpeggioSpec(arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 3, 2], [1, 3, 2])),
+    F: triadArpeggioSpec(arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 4, 2], [1, 4, 2])),
+    'F#': triadArpeggioSpec(arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 3, 2], [1, 3, 2])),
+    Gb: triadArpeggioSpec(arpeggioSpec([2, 1, 2], [4, 1, 2], [3, 1, 4], [2, 1, 4])),
+    G: triadArpeggioSpec(arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 4, 2], [1, 4, 2])),
+    'G#': triadArpeggioSpec(arpeggioSpec([3, 1, 2], [4, 1, 2], [3, 1, 4], [2, 1, 4])),
+    Ab: triadArpeggioSpec(arpeggioSpec([3, 1, 2], [4, 1, 2], [3, 1, 4], [2, 1, 4])),
+    A: triadArpeggioSpec(arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 3, 2], [1, 3, 2])),
+    'A#': triadArpeggioSpec(arpeggioSpec([3, 1, 2], [4, 1, 2], [3, 1, 4], [2, 1, 4])),
+    Bb: triadArpeggioSpec(arpeggioSpec([3, 1, 2], [4, 1, 2], [3, 1, 4], [2, 1, 4])),
+    B: triadArpeggioSpec(arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 3, 2], [1, 3, 2])),
+    Cb: triadArpeggioSpec(arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 3, 2], [1, 3, 2])),
   };
 }
 
 function minorTriadArpeggioKeys() {
   return {
-    C: arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 4, 2], [1, 4, 2]),
-    'C#': arpeggioSpec([2, 1, 2], [4, 1, 2], [3, 1, 4], [2, 1, 4]),
-    D: arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 4, 2], [1, 4, 2]),
-    'D#': arpeggioSpec([2, 1, 2], [4, 1, 2], [3, 1, 4], [2, 1, 4]),
-    Eb: arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 4, 2], [1, 4, 2]),
-    E: arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 4, 2], [1, 4, 2]),
-    F: arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 3, 2], [1, 3, 2]),
-    'F#': arpeggioSpec([2, 1, 2], [4, 1, 2], [3, 1, 4], [2, 1, 4]),
-    G: arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 3, 2], [1, 3, 2]),
-    'G#': arpeggioSpec([3, 1, 2], [4, 1, 2], [3, 1, 4], [2, 1, 4]),
-    Ab: arpeggioSpec([3, 1, 2], [4, 1, 2], [3, 1, 4], [2, 1, 4]),
-    A: arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 4, 2], [1, 4, 2]),
-    'A#': arpeggioSpec([3, 1, 2], [4, 1, 2], [3, 1, 4], [2, 1, 4]),
-    Bb: arpeggioSpec([2, 1, 3], [2, 1, 3], [3, 2, 1], [3, 2, 1]),
-    B: arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 4, 2], [1, 4, 2]),
-    Cb: arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 3, 2], [1, 3, 2]),
+    C: triadArpeggioSpec(arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 4, 2], [1, 4, 2])),
+    'C#': triadArpeggioSpec(arpeggioSpec([2, 1, 2], [4, 1, 2], [3, 1, 4], [2, 1, 4])),
+    D: triadArpeggioSpec(arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 4, 2], [1, 4, 2])),
+    'D#': triadArpeggioSpec(arpeggioSpec([2, 1, 2], [4, 1, 2], [3, 1, 4], [2, 1, 4])),
+    Eb: triadArpeggioSpec(arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 4, 2], [1, 4, 2])),
+    E: triadArpeggioSpec(arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 4, 2], [1, 4, 2])),
+    F: triadArpeggioSpec(arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 3, 2], [1, 3, 2])),
+    'F#': triadArpeggioSpec(arpeggioSpec([2, 1, 2], [4, 1, 2], [3, 1, 4], [2, 1, 4])),
+    G: triadArpeggioSpec(arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 3, 2], [1, 3, 2])),
+    'G#': triadArpeggioSpec(arpeggioSpec([3, 1, 2], [4, 1, 2], [3, 1, 4], [2, 1, 4])),
+    Ab: triadArpeggioSpec(arpeggioSpec([3, 1, 2], [4, 1, 2], [3, 1, 4], [2, 1, 4])),
+    A: triadArpeggioSpec(arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 4, 2], [1, 4, 2])),
+    'A#': triadArpeggioSpec(arpeggioSpec([3, 1, 2], [4, 1, 2], [3, 1, 4], [2, 1, 4])),
+    Bb: triadArpeggioSpec(arpeggioSpec([2, 1, 3], [2, 1, 3], [3, 2, 1], [3, 2, 1])),
+    B: triadArpeggioSpec(arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 4, 2], [1, 4, 2])),
+    Cb: triadArpeggioSpec(arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 3, 2], [1, 3, 2])),
   };
 }
 
@@ -925,6 +939,13 @@ function inversionName(position, chordSize) {
   return 'rootPosition';
 }
 
+function arpeggioInversionName(settings, chordSize) {
+  const inversion = Number.isInteger(settings.arpeggioInversion)
+    ? settings.arpeggioInversion
+    : 0;
+  return inversionName(inversion, chordSize);
+}
+
 function chordFingering(group, quality, hand, position, chordSize) {
   const definition = FINGERING_DEFINITIONS[group]?.[quality]?.[handKey(hand)];
   const named = definition?.[inversionName(position, chordSize)];
@@ -954,6 +975,14 @@ function fallbackArpeggioFingering(option, hand) {
       : makeArpeggioFingerings([5, 3, 2], [1, 3, 2], 1);
 }
 
+function arpeggioFingeringFromDefinition(definition, hand, inversion) {
+  const keyedByInversion = definition?.[inversion]?.[handKey(hand)]?.standard;
+  if (keyedByInversion) return keyedByInversion;
+
+  const handDefinition = definition?.[handKey(hand)];
+  return handDefinition?.[inversion] ?? handDefinition?.standard;
+}
+
 function isDescendingMelodicMinorNaturalIndex(settings, index) {
   if (settings.scaleType !== scaleTypes.MINOR_M) return false;
 
@@ -974,10 +1003,13 @@ function arpeggioFingeringForKey(option, hand, settings) {
   const group = option.chordSize === 4 ? 'seventhArpeggios' : 'triadArpeggios';
   const quality = option.value.replace(/^(triad|seventh)-/, '');
   const key = selectedKeyOption(settings).value;
-  const keyDefinition = FINGERING_DEFINITIONS[group]?.[quality]?.keys?.[key]?.[handKey(hand)]?.standard;
+  const definitions = FINGERING_DEFINITIONS[group]?.[quality];
+  const inversion = arpeggioInversionName(settings, option.chordSize);
+  const keyDefinition = arpeggioFingeringFromDefinition(definitions?.keys?.[key], hand, inversion);
   if (keyDefinition) return keyDefinition;
 
-  return fallbackArpeggioFingering(option, hand);
+  return arpeggioFingeringFromDefinition(definitions?.default, hand, inversion)
+    ?? fallbackArpeggioFingering(option, hand);
 }
 
 function chordToneLetter(rootLetter, degree) {

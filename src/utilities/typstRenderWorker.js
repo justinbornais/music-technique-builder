@@ -2,7 +2,6 @@ import { $typst } from '@myriaddreamin/typst.ts';
 import { TypstSnippet } from '@myriaddreamin/typst.ts/contrib/snippet';
 import compilerWasmUrl from '@myriaddreamin/typst-ts-web-compiler/pkg/typst_ts_web_compiler_bg.wasm?url';
 import rendererWasmUrl from '@myriaddreamin/typst-ts-renderer/pkg/typst_ts_renderer_bg.wasm?url';
-import bravuraFontUrl from '../typst/scorify/fonts/Bravura.otf?url';
 import scorifyWasmUrl from '../typst/scorify/scorify_wasm.wasm?url';
 
 const scorifySources = import.meta.glob('../typst/scorify/**/*.{typ,json}', {
@@ -61,7 +60,6 @@ async function initializeTypst() {
       });
       $typst.use(
         TypstSnippet.fetchPackageRegistry(),
-        TypstSnippet.preloadFontFromUrl(bravuraFontUrl),
       );
 
       await $typst.mapShadow(SCORIFY_WASM_PATH, await loadScorifyWasmBytes());
