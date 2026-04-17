@@ -103,7 +103,6 @@ function presetToSettings(preset, shared) {
         includeSevenths: false,
         includeArpeggios: false,
         triadPresentation: CHORD_PRESENTATION.BOTH,
-        pairRelativeKeys: false,
         allowedMajorKeys: BEGINNER_MAJOR_KEYS,
         allowedMinorKeys: BEGINNER_MINOR_KEYS,
         excludeMelodicMinor: true,
@@ -119,7 +118,6 @@ function presetToSettings(preset, shared) {
         triadPresentation: CHORD_PRESENTATION.BOTH,
         seventhPresentation: CHORD_PRESENTATION.BOTH,
         arpeggioPresentation: ARPEGGIO_PRESENTATION.ROOT_ONLY,
-        pairRelativeKeys: false,
         allowedMajorKeys: INTERMEDIATE_MAJOR_KEYS,
         allowedMinorKeys: INTERMEDIATE_MINOR_KEYS,
         excludeMelodicMinor: false,
@@ -135,7 +133,6 @@ function presetToSettings(preset, shared) {
         triadPresentation: CHORD_PRESENTATION.BOTH,
         seventhPresentation: CHORD_PRESENTATION.BOTH,
         arpeggioPresentation: ARPEGGIO_PRESENTATION.ROOT_AND_INVERSIONS,
-        pairRelativeKeys: true,
       };
     default:
       return base;
@@ -400,6 +397,7 @@ export default function TechniqueCollectionBuilder() {
     duration: 8,
     displayScale: 1,
     pairRelativeKeys: false,
+    groupByKey: false,
   });
   const [customSettings, setCustomSettings] = useState({
     ...DEFAULT_COLLECTION_SETTINGS,
@@ -442,10 +440,11 @@ export default function TechniqueCollectionBuilder() {
         ...customSettings,
         ...sharedSettings,
         title: customSettings.title || 'Custom Technique Collection',
+        techniqueOrder: customSectionOrder,
       };
     }
     return presetToSettings(activePreset, sharedSettings);
-  }, [activePreset, sharedSettings, customSettings]);
+  }, [activePreset, sharedSettings, customSettings, customSectionOrder]);
 
   const document = useMemo(
     () => committedSettings ? buildTechniqueCollectionDocument(committedSettings) : null,
@@ -800,6 +799,12 @@ export default function TechniqueCollectionBuilder() {
                 label="Pair relative keys"
                 checked={sharedSettings.pairRelativeKeys}
                 onChange={(v) => updateShared('pairRelativeKeys', v)}
+              />
+              <ToggleField
+                id="groupByKey"
+                label="Group by key"
+                checked={sharedSettings.groupByKey}
+                onChange={(v) => updateShared('groupByKey', v)}
               />
             </div>
 

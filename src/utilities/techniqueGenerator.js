@@ -127,8 +127,9 @@ export const DURATION_OPTIONS = [
 ];
 
 const DEFAULT_STAFF_SIZE_MM = 1.7;
-const TECHNIQUES_PER_RENDER_DOCUMENT = 4;
+const TECHNIQUES_PER_RENDER_DOCUMENT = 1;
 const DOUBLE_BARLINE_SEPARATOR = ' || ';
+const DEFAULT_TECHNIQUE_ORDER = ['scales', 'triads', 'sevenths', 'arpeggios'];
 
 export const DISPLAY_SIZE_OPTIONS = [
   { value: 1, label: 'Default', staffSizeMm: DEFAULT_STAFF_SIZE_MM },
@@ -225,6 +226,7 @@ export const DEFAULT_COLLECTION_SETTINGS = {
   showDetails: false,
   keyOrder: KEY_ORDERS.CHROMATIC,
   pairRelativeKeys: false,
+  groupByKey: false,
   includeScales: true,
   includeTriads: false,
   includeSevenths: false,
@@ -899,6 +901,17 @@ function triadRootOctaveForKey(keyOption, rootOctave) {
   return ['F', 'G', 'A', 'B'].includes(tonicLetter) ? rootOctave - 1 : rootOctave;
 }
 
+function seventhRootOctaveForKey(keyOption, handConfig) {
+  const tonicLetter = keyOption.value.charAt(0).toUpperCase();
+  if (handConfig.clef === HAND_CONFIG[HANDS.LEFT].clef) {
+    return handConfig.rootOctave - 1;
+  }
+
+  return ['F', 'G', 'A', 'B'].includes(tonicLetter)
+    ? handConfig.rootOctave - 1
+    : handConfig.rootOctave;
+}
+
 function arpeggioRootOctaveForKey(keyOption, handConfig) {
   const tonicLetter = keyOption.value.charAt(0).toUpperCase();
   if (handConfig.clef !== HAND_CONFIG[HANDS.LEFT].clef) {
@@ -1298,12 +1311,15 @@ function scaleMusicForHand(settings, hand) {
   return musicLine(tokens);
 }
 
-function brokenTriadGroupsForHand(settings, hand, option) {
+function brokenChordGroupsForHand(settings, hand, option) {
   const handConfig = HAND_CONFIG[hand];
-  const quality = option.value.replace(/^triad-/, '');
+  const quality = option.value.replace(/^(triad|seventh)-/, '');
+  const fingeringGroup = option.chordSize === 4 ? 'seventhChords' : 'triads';
   const keyOption = selectedKeyOption(settings);
   const rootLetter = keyOption.value.charAt(0).toUpperCase();
-  const rootOctave = triadRootOctaveForKey(keyOption, handConfig.rootOctave);
+  const rootOctave = option.chordSize === 3
+    ? triadRootOctaveForKey(keyOption, handConfig.rootOctave)
+    : seventhRootOctaveForKey(keyOption, handConfig);
   const rootPitch = pitchFromNote(keyOption.index, rootOctave);
   const positionCount = option.intervals.length + 1;
   const ascending = Array.from({ length: positionCount }, (_, position) => {
@@ -1315,7 +1331,7 @@ function brokenTriadGroupsForHand(settings, hand, option) {
       rootOctave,
       settings,
     );
-    const fingering = chordFingering('triads', quality, hand, position, option.intervals.length);
+    const fingering = chordFingering(fingeringGroup, quality, hand, position, option.intervals.length);
 
     return {
       notes: notes.map((note, index) => ({
@@ -1333,10 +1349,6 @@ function brokenTriadGroupsForHand(settings, hand, option) {
   if (settings.direction === DIRECTIONS.UP) return ascending;
   if (settings.direction === DIRECTIONS.DOWN) return descending;
   return [...ascending, ...descending];
-}
-
-function pitchForBrokenTriadGroup(group) {
-  return Math.max(...group.notes.map(pitchForNote));
 }
 
 function brokenTriadClefForGroup(settings, index) {
@@ -1380,7 +1392,7 @@ function brokenTriadTokens(groups, settings, context) {
 
 function brokenTriadMusicForHand(settings, hand, option) {
   const handConfig = HAND_CONFIG[hand];
-  const groups = brokenTriadGroupsForHand(settings, hand, option);
+  const groups = brokenChordGroupsForHand(settings, hand, option);
   const context = {
     ...handConfig,
     spelling: selectedSpelling(settings),
@@ -1389,6 +1401,21 @@ function brokenTriadMusicForHand(settings, hand, option) {
     useKeySignature: shouldUseKeySignature(settings),
   };
   const tokens = brokenTriadTokens(groups, settings, context);
+
+  return musicLine(tokens, '  ');
+}
+
+function brokenSeventhMusicForHand(settings, hand, option) {
+  const handConfig = HAND_CONFIG[hand];
+  const groups = brokenChordGroupsForHand(settings, hand, option);
+  const context = {
+    ...handConfig,
+    spelling: selectedSpelling(settings),
+    duration: Number(settings.duration),
+    showFingerings: settings.showFingerings,
+    useKeySignature: shouldUseKeySignature(settings),
+  };
+  const tokens = groups.map((group) => group.notes.map((note) => noteToken(note, context)).join(' '));
 
   return musicLine(tokens, '  ');
 }
@@ -1429,6 +1456,9 @@ function arpeggioMusicForHand(settings, hand) {
   const option = arpeggioOptionForSettings(settings);
   if (settings.brokenChord && option.chordSize === 3) {
     return brokenTriadMusicForHand(settings, hand, option);
+  }
+  if (settings.brokenChord && option.chordSize === 4) {
+    return brokenSeventhMusicForHand(settings, hand, option);
   }
 
   const spelling = selectedSpelling(settings);
@@ -1478,7 +1508,9 @@ function chordMusicForHand(settings, hand, options, quality) {
   const keyOption = selectedKeyOption(settings);
   const rootOctave = settings.technique === TECHNIQUE_TYPES.TRIAD
     ? triadRootOctaveForKey(keyOption, handConfig.rootOctave)
-    : handConfig.rootOctave;
+    : settings.technique === TECHNIQUE_TYPES.SEVENTH
+      ? seventhRootOctaveForKey(keyOption, handConfig)
+      : handConfig.rootOctave;
   const rootPitch = pitchFromNote(keyOption.index, rootOctave);
   const rootLetter = keyOption.value.charAt(0).toUpperCase();
   const totalPositions = effectiveOctaves(settings) * option.intervals.length + 1;
@@ -1732,41 +1764,115 @@ function addCollectionEntriesForKeys(entries, collectionSettings, settingsTempla
   });
 }
 
-function addScaleEntries(entries, collectionSettings) {
-  const base = collectionBaseSettings(collectionSettings);
-  // For ALL key orders, iterate by (major, relative-minor) key pairs so that each major key
-  // is always immediately followed by its relative minor variants.
-  const pairs = getOrderedKeyPairs(collectionSettings.keyOrder);
+function minorScaleOptionsForCollection(collectionSettings) {
   let minorScaleOptions = SCALE_OPTIONS.filter((o) => isMinorScale(o.value));
   if (collectionSettings.excludeMelodicMinor) {
     minorScaleOptions = minorScaleOptions.filter((o) => o.value !== scaleTypes.MINOR_M);
   }
 
-  pairs.forEach(({ major, minor }) => {
-    const majorKeyOpt = KEY_OPTIONS.find((opt) => opt.value === major && opt.majorKey);
-    const minorKeyOpt = KEY_OPTIONS.find((opt) => opt.value === minor && opt.minorKey);
+  return minorScaleOptions;
+}
 
-    if (majorKeyOpt && isKeyAllowed(major, false, collectionSettings)) {
-      const s = {
-        ...base,
-        technique: TECHNIQUE_TYPES.SCALE,
-        scaleType: scaleTypes.MAJOR,
-        key: major,
-      };
-      entries.push({ settings: s, title: techniqueLabel(s) });
-    }
-    if (minorKeyOpt && isKeyAllowed(minor, true, collectionSettings)) {
-      minorScaleOptions.forEach((scaleOpt) => {
-        const s = {
-          ...base,
-          technique: TECHNIQUE_TYPES.SCALE,
-          scaleType: scaleOpt.value,
-          key: minor,
-        };
-        entries.push({ settings: s, title: techniqueLabel(s) });
-      });
+function addMajorScaleEntry(entries, base, keyValue) {
+  const settings = {
+    ...base,
+    technique: TECHNIQUE_TYPES.SCALE,
+    scaleType: scaleTypes.MAJOR,
+    key: keyValue,
+  };
+  entries.push({ settings, title: techniqueLabel(settings) });
+}
+
+function addMinorScaleEntries(entries, base, keyValue, minorScaleOptions) {
+  minorScaleOptions.forEach((scaleOption) => {
+    const settings = {
+      ...base,
+      technique: TECHNIQUE_TYPES.SCALE,
+      scaleType: scaleOption.value,
+      key: keyValue,
+    };
+    entries.push({ settings, title: techniqueLabel(settings) });
+  });
+}
+
+function addScaleEntries(entries, collectionSettings) {
+  const base = collectionBaseSettings(collectionSettings);
+  const minorScaleOptions = minorScaleOptionsForCollection(collectionSettings);
+
+  if (collectionSettings.pairRelativeKeys) {
+    const pairs = getOrderedKeyPairs(collectionSettings.keyOrder);
+
+    pairs.forEach(({ major, minor }) => {
+      const majorKeyOpt = KEY_OPTIONS.find((opt) => opt.value === major && opt.majorKey);
+      const minorKeyOpt = KEY_OPTIONS.find((opt) => opt.value === minor && opt.minorKey);
+
+      if (majorKeyOpt && isKeyAllowed(major, false, collectionSettings)) {
+        addMajorScaleEntry(entries, base, major);
+      }
+      if (minorKeyOpt && isKeyAllowed(minor, true, collectionSettings)) {
+        addMinorScaleEntries(entries, base, minor, minorScaleOptions);
+      }
+    });
+    return;
+  }
+
+  if (collectionSettings.keyOrder === KEY_ORDERS.CHROMATIC) {
+    KEY_OPTIONS.forEach((keyOption) => {
+      if (keyOption.majorKey && isKeyAllowed(keyOption.value, false, collectionSettings)) {
+        addMajorScaleEntry(entries, base, keyOption.value);
+      }
+      if (keyOption.minorKey && isKeyAllowed(keyOption.value, true, collectionSettings)) {
+        addMinorScaleEntries(entries, base, keyOption.value, minorScaleOptions);
+      }
+    });
+    return;
+  }
+
+  const majorKeyOptions = orderKeyOptions(
+    KEY_OPTIONS.filter((option) => option.majorKey),
+    collectionSettings.keyOrder,
+    false,
+  );
+  const minorKeyOptions = orderKeyOptions(
+    KEY_OPTIONS.filter((option) => option.minorKey),
+    collectionSettings.keyOrder,
+    true,
+  );
+
+  majorKeyOptions.forEach((keyOption) => {
+    if (isKeyAllowed(keyOption.value, false, collectionSettings)) {
+      addMajorScaleEntry(entries, base, keyOption.value);
     }
   });
+  minorKeyOptions.forEach((keyOption) => {
+    if (isKeyAllowed(keyOption.value, true, collectionSettings)) {
+      addMinorScaleEntries(entries, base, keyOption.value, minorScaleOptions);
+    }
+  });
+}
+
+function addScaleEntriesForRelativePair(entries, collectionSettings, base, pair) {
+  const minorScaleOptions = minorScaleOptionsForCollection(collectionSettings);
+  const { major, minor } = pair;
+  const majorKeyOpt = KEY_OPTIONS.find((opt) => opt.value === major && opt.majorKey);
+  const minorKeyOpt = KEY_OPTIONS.find((opt) => opt.value === minor && opt.minorKey);
+
+  if (majorKeyOpt && isKeyAllowed(major, false, collectionSettings)) {
+    addMajorScaleEntry(entries, base, major);
+  }
+  if (minorKeyOpt && isKeyAllowed(minor, true, collectionSettings)) {
+    addMinorScaleEntries(entries, base, minor, minorScaleOptions);
+  }
+}
+
+function addScaleEntriesForKeyOption(entries, collectionSettings, base, keyOption) {
+  const minorScaleOptions = minorScaleOptionsForCollection(collectionSettings);
+  if (keyOption.majorKey && isKeyAllowed(keyOption.value, false, collectionSettings)) {
+    addMajorScaleEntry(entries, base, keyOption.value);
+  }
+  if (keyOption.minorKey && isKeyAllowed(keyOption.value, true, collectionSettings)) {
+    addMinorScaleEntries(entries, base, keyOption.value, minorScaleOptions);
+  }
 }
 
 function triadSolidSettings(base, qualityOption, keyValue) {
@@ -1834,6 +1940,24 @@ function addChromaticPairedTriadEntries(entries, collectionSettings) {
 }
 
 function addTriadEntries(entries, collectionSettings) {
+  if (collectionSettings.pairRelativeKeys) {
+    const base = collectionBaseSettings(collectionSettings);
+    getOrderedKeyPairs(collectionSettings.keyOrder).forEach(({ major, minor }) => {
+      const majorKeyOpt = KEY_OPTIONS.find((opt) => opt.value === major && opt.majorKey);
+      const minorKeyOpt = KEY_OPTIONS.find((opt) => opt.value === minor && opt.minorKey);
+
+      TRIAD_OPTIONS.forEach((qualityOption) => {
+        const useMinor = isTriadQualityMinorContext(qualityOption);
+        const keyValue = useMinor ? minor : major;
+        const keyOption = useMinor ? minorKeyOpt : majorKeyOpt;
+        if (!keyOption || !isKeyAllowed(keyValue, useMinor, collectionSettings)) return;
+
+        addTriadEntry(entries, collectionSettings, base, qualityOption, keyValue);
+      });
+    });
+    return;
+  }
+
   if (collectionSettings.keyOrder === KEY_ORDERS.CHROMATIC) {
     addChromaticPairedTriadEntries(entries, collectionSettings);
     return;
@@ -1856,27 +1980,92 @@ function addTriadEntries(entries, collectionSettings) {
   });
 }
 
+function seventhSolidSettings(base, qualityOption, keyValue) {
+  return {
+    ...base,
+    technique: TECHNIQUE_TYPES.SEVENTH,
+    seventhQuality: qualityOption.value,
+    key: keyValue,
+  };
+}
+
+function seventhBrokenSettings(base, qualityOption, keyValue) {
+  return {
+    ...base,
+    technique: TECHNIQUE_TYPES.ARPEGGIO,
+    arpeggioQuality: `seventh-${qualityOption.value}`,
+    brokenChord: true,
+    key: keyValue,
+  };
+}
+
+function addSeventhEntry(entries, collectionSettings, base, qualityOption, keyValue) {
+  const solid = seventhSolidSettings(base, qualityOption, keyValue);
+  const broken = seventhBrokenSettings(base, qualityOption, keyValue);
+
+  if (collectionSettings.seventhPresentation === CHORD_PRESENTATION.SOLID) {
+    entries.push({ settings: solid, title: techniqueLabel(solid) });
+    return;
+  }
+
+  if (collectionSettings.seventhPresentation === CHORD_PRESENTATION.BROKEN) {
+    entries.push({ settings: broken, title: `${techniqueLabel(broken)} - Broken` });
+    return;
+  }
+
+  entries.push({ settings: broken, title: `${techniqueLabel(broken)} - Broken` });
+  entries.push({ settings: solid, title: techniqueLabel(solid) });
+}
+
+function isSeventhQualityMinorContext(qualityOption) {
+  const quality = qualityOption.value.toLowerCase();
+  return quality.includes('minor') || quality.includes('diminished');
+}
+
+function addSeventhEntriesForKeyOption(entries, collectionSettings, base, keyOption) {
+  SEVENTH_OPTIONS.forEach((qualityOption) => {
+    const isMinorContext = isSeventhQualityMinorContext(qualityOption);
+    if (isMinorContext && !keyOption.minorKey) return;
+    if (!isMinorContext && !keyOption.majorKey) return;
+    if (!isKeyAllowed(keyOption.value, isMinorContext, collectionSettings)) return;
+
+    addSeventhEntry(entries, collectionSettings, base, qualityOption, keyOption.value);
+  });
+}
+
 function addSeventhEntries(entries, collectionSettings) {
+  if (collectionSettings.pairRelativeKeys) {
+    const base = collectionBaseSettings(collectionSettings);
+    getOrderedKeyPairs(collectionSettings.keyOrder).forEach(({ major, minor }) => {
+      const majorKeyOpt = KEY_OPTIONS.find((opt) => opt.value === major && opt.majorKey);
+      const minorKeyOpt = KEY_OPTIONS.find((opt) => opt.value === minor && opt.minorKey);
+
+      SEVENTH_OPTIONS.forEach((qualityOption) => {
+        const useMinor = isSeventhQualityMinorContext(qualityOption);
+        const keyValue = useMinor ? minor : major;
+        const keyOption = useMinor ? minorKeyOpt : majorKeyOpt;
+        if (!keyOption || !isKeyAllowed(keyValue, useMinor, collectionSettings)) return;
+
+        addSeventhEntry(entries, collectionSettings, base, qualityOption, keyValue);
+      });
+    });
+    return;
+  }
+
   const base = collectionBaseSettings(collectionSettings);
   SEVENTH_OPTIONS.forEach((qualityOption) => {
-    const solidTemplate = {
+    const template = {
       ...base,
       technique: TECHNIQUE_TYPES.SEVENTH,
       seventhQuality: qualityOption.value,
     };
-    const brokenTemplate = {
-      ...base,
-      technique: TECHNIQUE_TYPES.ARPEGGIO,
-      arpeggioQuality: `seventh-${qualityOption.value}`,
-      brokenChord: true,
-    };
+    const isMinorContext = usesMinorKeySignature(template);
+    const keyOptions = collectionKeyOptions(template, collectionSettings.keyOrder);
 
-    if (collectionSettings.seventhPresentation !== CHORD_PRESENTATION.BROKEN) {
-      addCollectionEntriesForKeys(entries, collectionSettings, solidTemplate);
-    }
-    if (collectionSettings.seventhPresentation !== CHORD_PRESENTATION.SOLID) {
-      addCollectionEntriesForKeys(entries, collectionSettings, brokenTemplate, ' - Broken');
-    }
+    keyOptions.forEach((keyOption) => {
+      if (!isKeyAllowed(keyOption.value, isMinorContext, collectionSettings)) return;
+      addSeventhEntry(entries, collectionSettings, base, qualityOption, keyOption.value);
+    });
   });
 }
 
@@ -1941,6 +2130,25 @@ function addChromaticPairedArpeggioEntries(entries, collectionSettings) {
 }
 
 function addArpeggioEntries(entries, collectionSettings) {
+  if (collectionSettings.pairRelativeKeys) {
+    const base = collectionBaseSettings(collectionSettings);
+    getOrderedKeyPairs(collectionSettings.keyOrder).forEach(({ major, minor }) => {
+      const majorKeyOpt = KEY_OPTIONS.find((opt) => opt.value === major && opt.majorKey);
+      const minorKeyOpt = KEY_OPTIONS.find((opt) => opt.value === minor && opt.minorKey);
+
+      ARPEGGIO_OPTIONS.forEach((option) => {
+        const template = arpeggioTemplateForOption(base, option);
+        const useMinor = usesMinorKeySignature(template);
+        const keyValue = useMinor ? minor : major;
+        const keyOption = useMinor ? minorKeyOpt : majorKeyOpt;
+        if (!keyOption || !isKeyAllowed(keyValue, useMinor, collectionSettings)) return;
+
+        addArpeggioEntryForKey(entries, collectionSettings, template, option, keyValue);
+      });
+    });
+    return;
+  }
+
   if (collectionSettings.keyOrder === KEY_ORDERS.CHROMATIC) {
     addChromaticPairedArpeggioEntries(entries, collectionSettings);
     return;
@@ -1959,116 +2167,117 @@ function addArpeggioEntries(entries, collectionSettings) {
   });
 }
 
-// When pairRelativeKeys is on, group all selected technique families by relative key pair.
-function collectionEntriesGroupedByPair(collectionSettings) {
-  const base = collectionBaseSettings(collectionSettings);
-  const pairs = getOrderedKeyPairs(collectionSettings.keyOrder);
-  const entries = [];
-  let minorScaleOptions = SCALE_OPTIONS.filter((o) => isMinorScale(o.value));
-  if (collectionSettings.excludeMelodicMinor) {
-    minorScaleOptions = minorScaleOptions.filter((o) => o.value !== scaleTypes.MINOR_M);
+function techniqueOrderForSettings(collectionSettings) {
+  const requested = Array.isArray(collectionSettings.techniqueOrder)
+    ? collectionSettings.techniqueOrder
+    : [];
+  const ordered = requested.filter((sectionId) => DEFAULT_TECHNIQUE_ORDER.includes(sectionId));
+  const missing = DEFAULT_TECHNIQUE_ORDER.filter((sectionId) => !ordered.includes(sectionId));
+  return [...ordered, ...missing];
+}
+
+function addEntriesForTechnique(entries, collectionSettings, sectionId) {
+  if (sectionId === 'scales' && collectionSettings.includeScales) {
+    addScaleEntries(entries, collectionSettings);
+  } else if (sectionId === 'triads' && collectionSettings.includeTriads) {
+    addTriadEntries(entries, collectionSettings);
+  } else if (sectionId === 'sevenths' && collectionSettings.includeSevenths) {
+    addSeventhEntries(entries, collectionSettings);
+  } else if (sectionId === 'arpeggios' && collectionSettings.includeArpeggios) {
+    addArpeggioEntries(entries, collectionSettings);
+  }
+}
+
+function addEntriesForTechniqueAndRelativePair(entries, collectionSettings, base, sectionId, pair) {
+  const { major, minor } = pair;
+  const majorKeyOpt = KEY_OPTIONS.find((opt) => opt.value === major && opt.majorKey);
+  const minorKeyOpt = KEY_OPTIONS.find((opt) => opt.value === minor && opt.minorKey);
+
+  if (sectionId === 'scales' && collectionSettings.includeScales) {
+    addScaleEntriesForRelativePair(entries, collectionSettings, base, pair);
+  } else if (sectionId === 'triads' && collectionSettings.includeTriads) {
+    TRIAD_OPTIONS.forEach((qualityOption) => {
+      const useMinor = isTriadQualityMinorContext(qualityOption);
+      const keyValue = useMinor ? minor : major;
+      const keyOption = useMinor ? minorKeyOpt : majorKeyOpt;
+      if (!keyOption || !isKeyAllowed(keyValue, useMinor, collectionSettings)) return;
+
+      addTriadEntry(entries, collectionSettings, base, qualityOption, keyValue);
+    });
+  } else if (sectionId === 'sevenths' && collectionSettings.includeSevenths) {
+    SEVENTH_OPTIONS.forEach((qualityOption) => {
+      const useMinor = isSeventhQualityMinorContext(qualityOption);
+      const keyValue = useMinor ? minor : major;
+      const keyOption = useMinor ? minorKeyOpt : majorKeyOpt;
+      if (!keyOption || !isKeyAllowed(keyValue, useMinor, collectionSettings)) return;
+
+      addSeventhEntry(entries, collectionSettings, base, qualityOption, keyValue);
+    });
+  } else if (sectionId === 'arpeggios' && collectionSettings.includeArpeggios) {
+    ARPEGGIO_OPTIONS.forEach((option) => {
+      const template = arpeggioTemplateForOption(base, option);
+      const useMinor = usesMinorKeySignature(template);
+      const keyValue = useMinor ? minor : major;
+      const keyOption = useMinor ? minorKeyOpt : majorKeyOpt;
+      if (!keyOption || !isKeyAllowed(keyValue, useMinor, collectionSettings)) return;
+
+      addArpeggioEntryForKey(entries, collectionSettings, template, option, keyValue);
+    });
+  }
+}
+
+function addEntriesForTechniqueAndKeyOption(entries, collectionSettings, base, sectionId, keyOption) {
+  if (sectionId === 'scales' && collectionSettings.includeScales) {
+    addScaleEntriesForKeyOption(entries, collectionSettings, base, keyOption);
+  } else if (sectionId === 'triads' && collectionSettings.includeTriads) {
+    addChromaticPairedTriadEntriesForKeyOption(entries, collectionSettings, base, keyOption);
+  } else if (sectionId === 'sevenths' && collectionSettings.includeSevenths) {
+    addSeventhEntriesForKeyOption(entries, collectionSettings, base, keyOption);
+  } else if (sectionId === 'arpeggios' && collectionSettings.includeArpeggios) {
+    addChromaticPairedArpeggioEntriesForKeyOption(entries, collectionSettings, base, keyOption);
+  }
+}
+
+function keyOptionsForKeyGroups(collectionSettings) {
+  if (collectionSettings.keyOrder === KEY_ORDERS.CHROMATIC) {
+    return KEY_OPTIONS;
   }
 
-  pairs.forEach(({ major, minor }) => {
-    const majorKeyOpt = KEY_OPTIONS.find((opt) => opt.value === major && opt.majorKey);
-    const minorKeyOpt = KEY_OPTIONS.find((opt) => opt.value === minor && opt.minorKey);
-    const majorAllowed = majorKeyOpt && isKeyAllowed(major, false, collectionSettings);
-    const minorAllowed = minorKeyOpt && isKeyAllowed(minor, true, collectionSettings);
+  return orderKeyOptions(KEY_OPTIONS, collectionSettings.keyOrder, false);
+}
 
-    if (collectionSettings.includeScales) {
-      if (majorAllowed) {
-        const s = { ...base, technique: TECHNIQUE_TYPES.SCALE, scaleType: scaleTypes.MAJOR, key: major };
-        entries.push({ settings: s, title: techniqueLabel(s) });
-      }
-      if (minorAllowed) {
-        minorScaleOptions.forEach((scaleOpt) => {
-          const s = { ...base, technique: TECHNIQUE_TYPES.SCALE, scaleType: scaleOpt.value, key: minor };
-          entries.push({ settings: s, title: techniqueLabel(s) });
-        });
-      }
-    }
+function collectionEntriesGroupedByKey(collectionSettings) {
+  const base = collectionBaseSettings(collectionSettings);
+  const entries = [];
+  const techniqueOrder = techniqueOrderForSettings(collectionSettings);
 
-    if (collectionSettings.includeTriads) {
-      if (collectionSettings.keyOrder === KEY_ORDERS.CHROMATIC) {
-        const parallelKeyOpt = KEY_OPTIONS.find((opt) => opt.value === major);
-        if (parallelKeyOpt) {
-          addChromaticPairedTriadEntriesForKeyOption(
-            entries,
-            collectionSettings,
-            base,
-            parallelKeyOpt,
-          );
-        }
-      } else {
-        TRIAD_OPTIONS.forEach((qualOpt) => {
-          const useMinor = isTriadQualityMinorContext(qualOpt);
-          const keyVal = useMinor ? minor : major;
-          const keyOpt = useMinor ? minorKeyOpt : majorKeyOpt;
-          const allowed = useMinor ? minorAllowed : majorAllowed;
-          if (!keyOpt || !allowed) return;
-
-          addTriadEntry(entries, collectionSettings, base, qualOpt, keyVal);
-        });
-      }
-    }
-
-    if (collectionSettings.includeSevenths) {
-      SEVENTH_OPTIONS.forEach((qualOpt) => {
-        const q = qualOpt.value.toLowerCase();
-        const useMinor = q.includes('minor') || q.includes('diminished');
-        const keyVal = useMinor ? minor : major;
-        const keyOpt = useMinor ? minorKeyOpt : majorKeyOpt;
-        const allowed = useMinor ? minorAllowed : majorAllowed;
-        if (!keyOpt || !allowed) return;
-        if (collectionSettings.seventhPresentation !== CHORD_PRESENTATION.BROKEN) {
-          const s = { ...base, technique: TECHNIQUE_TYPES.SEVENTH, seventhQuality: qualOpt.value, key: keyVal };
-          entries.push({ settings: s, title: techniqueLabel(s) });
-        }
-        if (collectionSettings.seventhPresentation !== CHORD_PRESENTATION.SOLID) {
-          const s = { ...base, technique: TECHNIQUE_TYPES.ARPEGGIO, arpeggioQuality: `seventh-${qualOpt.value}`, brokenChord: true, key: keyVal };
-          entries.push({ settings: s, title: `${techniqueLabel(s)} - Broken` });
-        }
+  if (collectionSettings.pairRelativeKeys) {
+    getOrderedKeyPairs(collectionSettings.keyOrder).forEach((pair) => {
+      techniqueOrder.forEach((sectionId) => {
+        addEntriesForTechniqueAndRelativePair(entries, collectionSettings, base, sectionId, pair);
       });
-    }
+    });
+    return entries;
+  }
 
-    if (collectionSettings.includeArpeggios) {
-      if (collectionSettings.keyOrder === KEY_ORDERS.CHROMATIC) {
-        const parallelKeyOpt = KEY_OPTIONS.find((opt) => opt.value === major);
-        if (parallelKeyOpt) {
-          addChromaticPairedArpeggioEntriesForKeyOption(
-            entries,
-            collectionSettings,
-            base,
-            parallelKeyOpt,
-          );
-        }
-      } else {
-        ARPEGGIO_OPTIONS.forEach((option) => {
-          const template = arpeggioTemplateForOption(base, option);
-          const useMinor = usesMinorKeySignature(template);
-          const keyVal = useMinor ? minor : major;
-          const keyOpt = useMinor ? minorKeyOpt : majorKeyOpt;
-          const allowed = useMinor ? minorAllowed : majorAllowed;
-          if (!keyOpt || !allowed) return;
-
-          addArpeggioEntryForKey(entries, collectionSettings, template, option, keyVal);
-        });
-      }
-    }
+  keyOptionsForKeyGroups(collectionSettings).forEach((keyOption) => {
+    techniqueOrder.forEach((sectionId) => {
+      addEntriesForTechniqueAndKeyOption(entries, collectionSettings, base, sectionId, keyOption);
+    });
   });
 
   return entries;
 }
 
 export function collectionEntriesForSettings(collectionSettings) {
-  if (collectionSettings.pairRelativeKeys) {
-    return collectionEntriesGroupedByPair(collectionSettings);
+  if (collectionSettings.groupByKey) {
+    return collectionEntriesGroupedByKey(collectionSettings);
   }
+
   const entries = [];
-  if (collectionSettings.includeScales) addScaleEntries(entries, collectionSettings);
-  if (collectionSettings.includeTriads) addTriadEntries(entries, collectionSettings);
-  if (collectionSettings.includeSevenths) addSeventhEntries(entries, collectionSettings);
-  if (collectionSettings.includeArpeggios) addArpeggioEntries(entries, collectionSettings);
+  techniqueOrderForSettings(collectionSettings).forEach((sectionId) => {
+    addEntriesForTechnique(entries, collectionSettings, sectionId);
+  });
   return entries;
 }
 
