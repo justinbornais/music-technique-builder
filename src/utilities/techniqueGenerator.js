@@ -1534,10 +1534,14 @@ function chordMusicForHand(settings, hand, options, quality) {
     useKeySignature: shouldUseKeySignature(settings),
   };
 
-  if (settings.technique === TECHNIQUE_TYPES.TRIAD && hand === HANDS.LEFT) {
+  if (
+    hand === HANDS.LEFT
+    && [TECHNIQUE_TYPES.TRIAD, TECHNIQUE_TYPES.SEVENTH].includes(settings.technique)
+  ) {
+    const fingeringGroup = option.intervals.length === 4 ? 'seventhChords' : 'triads';
     const tokens = directed.map((chord) => chordToken(
       chord.notes,
-      chordFingering('triads', quality, hand, chord.position, option.intervals.length),
+      chordFingering(fingeringGroup, quality, hand, chord.position, option.intervals.length),
       context,
     ));
     return musicLine(tokens);
