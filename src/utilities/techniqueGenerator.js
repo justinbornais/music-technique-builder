@@ -128,6 +128,7 @@ export const DURATION_OPTIONS = [
 
 const DEFAULT_STAFF_SIZE_MM = 1.7;
 const TECHNIQUES_PER_RENDER_DOCUMENT = 4;
+const DOUBLE_BARLINE_SEPARATOR = ' || ';
 
 export const DISPLAY_SIZE_OPTIONS = [
   { value: 1, label: 'Default', staffSizeMm: DEFAULT_STAFF_SIZE_MM },
@@ -893,6 +894,11 @@ function scaleRootOctaveForKey(keyOption, rootOctave) {
   return ['G', 'A', 'B'].includes(tonicLetter) ? rootOctave - 1 : rootOctave;
 }
 
+function triadRootOctaveForKey(keyOption, rootOctave) {
+  const tonicLetter = keyOption.value.charAt(0).toUpperCase();
+  return ['F', 'G', 'A', 'B'].includes(tonicLetter) ? rootOctave - 1 : rootOctave;
+}
+
 function arpeggioRootOctaveForKey(keyOption, handConfig) {
   const tonicLetter = keyOption.value.charAt(0).toUpperCase();
   if (handConfig.clef !== HAND_CONFIG[HANDS.LEFT].clef) {
@@ -1297,7 +1303,8 @@ function brokenTriadGroupsForHand(settings, hand, option) {
   const quality = option.value.replace(/^triad-/, '');
   const keyOption = selectedKeyOption(settings);
   const rootLetter = keyOption.value.charAt(0).toUpperCase();
-  const rootPitch = pitchFromNote(keyOption.index, handConfig.rootOctave);
+  const rootOctave = triadRootOctaveForKey(keyOption, handConfig.rootOctave);
+  const rootPitch = pitchFromNote(keyOption.index, rootOctave);
   const positionCount = option.intervals.length + 1;
   const ascending = Array.from({ length: positionCount }, (_, position) => {
     const notes = spelledInversionChord(
@@ -1305,7 +1312,7 @@ function brokenTriadGroupsForHand(settings, hand, option) {
       option.intervals,
       position,
       rootLetter,
-      handConfig.rootOctave,
+      rootOctave,
       settings,
     );
     const fingering = chordFingering('triads', quality, hand, position, option.intervals.length);
@@ -1332,6 +1339,45 @@ function pitchForBrokenTriadGroup(group) {
   return Math.max(...group.notes.map(pitchForNote));
 }
 
+function brokenTriadClefForGroup(settings, index) {
+  const tonicLetter = selectedKeyOption(settings).value.charAt(0).toUpperCase();
+  if (!['C', 'D', 'E'].includes(tonicLetter)) return 'bass';
+
+  if (settings.direction === DIRECTIONS.DOWN) {
+    return index === 0 ? 'treble' : 'bass';
+  }
+
+  if (settings.direction === DIRECTIONS.BOTH) {
+    if (index < 3) return 'bass';
+    if (index < 5) return 'treble';
+    return 'bass';
+  }
+
+  return index >= 3 ? 'treble' : 'bass';
+}
+
+function brokenTriadTokens(groups, settings, context) {
+  if (context.clef !== HAND_CONFIG[HANDS.LEFT].clef) {
+    return groups.map((group) => group.notes.map((note) => noteToken(note, context)).join(' '));
+  }
+
+  const tokens = [];
+  let activeClef = 'bass';
+
+  groups.forEach((group, index) => {
+    const nextClef = brokenTriadClefForGroup(settings, index);
+    if (nextClef !== activeClef) {
+      tokens.push(nextClef);
+      activeClef = nextClef;
+    }
+
+    const activeContext = contextForClef(context, activeClef);
+    tokens.push(group.notes.map((note) => noteToken(note, activeContext)).join(' '));
+  });
+
+  return tokens;
+}
+
 function brokenTriadMusicForHand(settings, hand, option) {
   const handConfig = HAND_CONFIG[hand];
   const groups = brokenTriadGroupsForHand(settings, hand, option);
@@ -1342,12 +1388,7 @@ function brokenTriadMusicForHand(settings, hand, option) {
     showFingerings: settings.showFingerings,
     useKeySignature: shouldUseKeySignature(settings),
   };
-  const tokens = tokensWithLeftHandClefs(
-    groups,
-    context,
-    (group, activeContext) => group.notes.map((note) => noteToken(note, activeContext)).join(' '),
-    pitchForBrokenTriadGroup,
-  );
+  const tokens = brokenTriadTokens(groups, settings, context);
 
   return musicLine(tokens, '  ');
 }
@@ -1435,7 +1476,10 @@ function chordMusicForHand(settings, hand, options, quality) {
   const option = getOption(options, quality);
   const spelling = selectedSpelling(settings);
   const keyOption = selectedKeyOption(settings);
-  const rootPitch = pitchFromNote(keyOption.index, handConfig.rootOctave);
+  const rootOctave = settings.technique === TECHNIQUE_TYPES.TRIAD
+    ? triadRootOctaveForKey(keyOption, handConfig.rootOctave)
+    : handConfig.rootOctave;
+  const rootPitch = pitchFromNote(keyOption.index, rootOctave);
   const rootLetter = keyOption.value.charAt(0).toUpperCase();
   const totalPositions = effectiveOctaves(settings) * option.intervals.length + 1;
   const chords = Array.from({ length: totalPositions }, (_, index) => ({
@@ -1444,7 +1488,7 @@ function chordMusicForHand(settings, hand, options, quality) {
       option.intervals,
       index,
       rootLetter,
-      handConfig.rootOctave,
+      rootOctave,
       settings,
     ),
     position: index,
@@ -1457,6 +1501,15 @@ function chordMusicForHand(settings, hand, options, quality) {
     showFingerings: settings.showFingerings,
     useKeySignature: shouldUseKeySignature(settings),
   };
+
+  if (settings.technique === TECHNIQUE_TYPES.TRIAD && hand === HANDS.LEFT) {
+    const tokens = directed.map((chord) => chordToken(
+      chord.notes,
+      chordFingering('triads', quality, hand, chord.position, option.intervals.length),
+      context,
+    ));
+    return musicLine(tokens);
+  }
 
   const tokens = tokensWithLeftHandClefs(
     directed,
@@ -1567,7 +1620,7 @@ function formatTypstStaves(staves) {
     .join(',\n');
 }
 
-function stavesForSettingsGroup(settingsGroup) {
+function stavesForSettingsGroup(settingsGroup, options = {}) {
   const first = settingsGroup[0];
   const hands = first.hand === HANDS.TOGETHER ? [HANDS.RIGHT, HANDS.LEFT] : [first.hand];
   const needsLeftHandClefReset = settingsGroup.some(
@@ -1576,7 +1629,8 @@ function stavesForSettingsGroup(settingsGroup) {
 
   return hands.map((hand) => {
     const config = HAND_CONFIG[hand];
-    const separator = hand === HANDS.LEFT && needsLeftHandClefReset ? ' | bass ' : ' | ';
+    const separator = options.groupSeparator
+      ?? (hand === HANDS.LEFT && needsLeftHandClefReset ? ' | bass ' : ' | ');
     return {
       clef: config.clef,
       music: settingsGroup.map((settings) => musicForHand(settings, hand)).join(separator),
@@ -1594,7 +1648,7 @@ function scoreCallForSettingsGroup(
   const first = settingsGroup[0];
   const staves = settingsGroup.length === 1
     ? stavesForSettings(first)
-    : stavesForSettingsGroup(settingsGroup);
+    : stavesForSettingsGroup(settingsGroup, options);
   const key = keyForSettings(first);
   const systemSpacing = options.compact ? '2mm' : '9mm';
 
@@ -1715,27 +1769,90 @@ function addScaleEntries(entries, collectionSettings) {
   });
 }
 
+function triadSolidSettings(base, qualityOption, keyValue) {
+  return {
+    ...base,
+    technique: TECHNIQUE_TYPES.TRIAD,
+    triadQuality: qualityOption.value,
+    key: keyValue,
+  };
+}
+
+function triadBrokenSettings(base, qualityOption, keyValue) {
+  return {
+    ...base,
+    technique: TECHNIQUE_TYPES.ARPEGGIO,
+    arpeggioQuality: `triad-${qualityOption.value}`,
+    brokenChord: true,
+    key: keyValue,
+  };
+}
+
+function addTriadEntry(entries, collectionSettings, base, qualityOption, keyValue) {
+  const solid = triadSolidSettings(base, qualityOption, keyValue);
+  const broken = triadBrokenSettings(base, qualityOption, keyValue);
+
+  if (collectionSettings.triadPresentation === CHORD_PRESENTATION.SOLID) {
+    entries.push({ settings: solid, title: techniqueLabel(solid) });
+    return;
+  }
+
+  if (collectionSettings.triadPresentation === CHORD_PRESENTATION.BROKEN) {
+    entries.push({ settings: broken, title: `${techniqueLabel(broken)} - Broken` });
+    return;
+  }
+
+  entries.push({
+    settings: solid,
+    settingsGroup: [broken, solid],
+    techniqueCount: 2,
+    title: techniqueLabel(solid),
+    groupSeparator: DOUBLE_BARLINE_SEPARATOR,
+  });
+}
+
+function isTriadQualityMinorContext(qualityOption) {
+  return qualityOption.value === 'minor' || qualityOption.value === 'diminished';
+}
+
+function addChromaticPairedTriadEntriesForKeyOption(entries, collectionSettings, base, keyOption) {
+  TRIAD_OPTIONS.forEach((qualityOption) => {
+    const isMinorContext = isTriadQualityMinorContext(qualityOption);
+    if (isMinorContext && !keyOption.minorKey) return;
+    if (!isMinorContext && !keyOption.majorKey) return;
+    if (!isKeyAllowed(keyOption.value, isMinorContext, collectionSettings)) return;
+
+    addTriadEntry(entries, collectionSettings, base, qualityOption, keyOption.value);
+  });
+}
+
+function addChromaticPairedTriadEntries(entries, collectionSettings) {
+  const base = collectionBaseSettings(collectionSettings);
+  KEY_OPTIONS.forEach((keyOption) => {
+    addChromaticPairedTriadEntriesForKeyOption(entries, collectionSettings, base, keyOption);
+  });
+}
+
 function addTriadEntries(entries, collectionSettings) {
+  if (collectionSettings.keyOrder === KEY_ORDERS.CHROMATIC) {
+    addChromaticPairedTriadEntries(entries, collectionSettings);
+    return;
+  }
+
   const base = collectionBaseSettings(collectionSettings);
   TRIAD_OPTIONS.forEach((qualityOption) => {
-    const solidTemplate = {
+    const template = {
       ...base,
       technique: TECHNIQUE_TYPES.TRIAD,
       triadQuality: qualityOption.value,
     };
-    const brokenTemplate = {
-      ...base,
-      technique: TECHNIQUE_TYPES.ARPEGGIO,
-      arpeggioQuality: `triad-${qualityOption.value}`,
-      brokenChord: true,
-    };
+    const isMinorContext = usesMinorKeySignature(template);
+    const keyOptions = collectionKeyOptions(template, collectionSettings.keyOrder);
 
-    if (collectionSettings.triadPresentation !== CHORD_PRESENTATION.BROKEN) {
-      addCollectionEntriesForKeys(entries, collectionSettings, solidTemplate);
-    }
-    if (collectionSettings.triadPresentation !== CHORD_PRESENTATION.SOLID) {
-      addCollectionEntriesForKeys(entries, collectionSettings, brokenTemplate, ' - Broken');
-    }
+    keyOptions.forEach((keyOption) => {
+      if (!isKeyAllowed(keyOption.value, isMinorContext, collectionSettings)) return;
+      addTriadEntry(entries, collectionSettings, base, qualityOption, keyOption.value);
+    });
   });
 }
 
@@ -1872,21 +1989,27 @@ function collectionEntriesGroupedByPair(collectionSettings) {
     }
 
     if (collectionSettings.includeTriads) {
-      TRIAD_OPTIONS.forEach((qualOpt) => {
-        const useMinor = qualOpt.value === 'minor' || qualOpt.value === 'diminished';
-        const keyVal = useMinor ? minor : major;
-        const keyOpt = useMinor ? minorKeyOpt : majorKeyOpt;
-        const allowed = useMinor ? minorAllowed : majorAllowed;
-        if (!keyOpt || !allowed) return;
-        if (collectionSettings.triadPresentation !== CHORD_PRESENTATION.BROKEN) {
-          const s = { ...base, technique: TECHNIQUE_TYPES.TRIAD, triadQuality: qualOpt.value, key: keyVal };
-          entries.push({ settings: s, title: techniqueLabel(s) });
+      if (collectionSettings.keyOrder === KEY_ORDERS.CHROMATIC) {
+        const parallelKeyOpt = KEY_OPTIONS.find((opt) => opt.value === major);
+        if (parallelKeyOpt) {
+          addChromaticPairedTriadEntriesForKeyOption(
+            entries,
+            collectionSettings,
+            base,
+            parallelKeyOpt,
+          );
         }
-        if (collectionSettings.triadPresentation !== CHORD_PRESENTATION.SOLID) {
-          const s = { ...base, technique: TECHNIQUE_TYPES.ARPEGGIO, arpeggioQuality: `triad-${qualOpt.value}`, brokenChord: true, key: keyVal };
-          entries.push({ settings: s, title: `${techniqueLabel(s)} - Broken` });
-        }
-      });
+      } else {
+        TRIAD_OPTIONS.forEach((qualOpt) => {
+          const useMinor = isTriadQualityMinorContext(qualOpt);
+          const keyVal = useMinor ? minor : major;
+          const keyOpt = useMinor ? minorKeyOpt : majorKeyOpt;
+          const allowed = useMinor ? minorAllowed : majorAllowed;
+          if (!keyOpt || !allowed) return;
+
+          addTriadEntry(entries, collectionSettings, base, qualOpt, keyVal);
+        });
+      }
     }
 
     if (collectionSettings.includeSevenths) {
@@ -1975,7 +2098,7 @@ function scoreCallForEntry(entry, options = {}) {
     settingsGroup,
     entry.title,
     options.showDetails ? subtitleForSettings(first) : '',
-    { compact: true },
+    { compact: true, groupSeparator: entry.groupSeparator },
   );
 }
 
