@@ -1,255 +1,52 @@
+import { getScaleNotes, scaleDirection, scaleTypes } from './noteConversions.js';
 import {
-  accidentals,
-  getScaleNotes,
-  noteName,
-  scaleDirection,
-  scaleTypes,
-} from './noteConversions.js';
+  ALL_ARPEGGIO_OPTIONS,
+  ARPEGGIO_OPTIONS,
+  ARPEGGIO_PRESENTATION,
+  CHORD_PRESENTATION,
+  CHROMATIC_KEY_PAIRS,
+  FIFTHS_KEY_PAIRS,
+  ACCIDENTALS_KEY_PAIRS,
+  DEFAULT_SETTINGS,
+  DEFAULT_TECHNIQUE_ORDER,
+  DIRECTIONS,
+  DISPLAY_SIZE_OPTIONS,
+  DOUBLE_BARLINE_SEPARATOR,
+  DURATION_OPTIONS,
+  HAND_CONFIG,
+  HANDS,
+  KEY_OPTIONS,
+  KEY_ORDERS,
+  LETTER_BASE_INDEX,
+  LETTERS,
+  RENDER_MODES,
+  SCALE_OPTIONS,
+  SEVENTH_OPTIONS,
+  TECHNIQUE_TYPES,
+  TECHNIQUES_PER_RENDER_DOCUMENT,
+  TRIAD_OPTIONS,
+} from './techniqueDefinitions.js';
+import { FINGERING_DEFINITIONS, makeArpeggioFingerings } from './fingeringDefinitions.js';
+import {
+  typstString,
+  typstContent,
+  typstDocument,
+  formatDuration,
+  solidChordDuration,
+  finalScaleDuration,
+  finalArpeggioDuration,
+  noteToken,
+  chordToken,
+  musicLine,
+  formatTypstStaves,
+  keySignatureAccidentals,
+  accidentalForKeySignature,
+  accidentalForWrittenPitch,
+} from './typstConversion.js';
 
-const SHARP = accidentals.SHARP;
-const FLAT = accidentals.PREFER_FLAT;
-const NATURAL = accidentals.NATURAL;
-
-export const RENDER_MODES = {
-  KEY_SIGNATURE: 'key-signature',
-  ACCIDENTALS: 'accidentals',
-};
-
-export const KEY_OPTIONS = [
-  { value: 'C', label: 'C', index: 3, spelling: NATURAL, majorKey: 'C', minorKey: 'c' },
-  { value: 'C#', label: 'C#', index: 4, spelling: SHARP, majorKey: 'C#', minorKey: 'c#' },
-  { value: 'Db', label: 'Db', index: 4, spelling: FLAT, majorKey: 'Db', minorKey: null },
-  { value: 'D', label: 'D', index: 5, spelling: NATURAL, majorKey: 'D', minorKey: 'd' },
-  { value: 'D#', label: 'D#', index: 6, spelling: SHARP, majorKey: null, minorKey: 'd#' },
-  { value: 'Eb', label: 'Eb', index: 6, spelling: FLAT, majorKey: 'Eb', minorKey: 'eb' },
-  { value: 'E', label: 'E', index: 7, spelling: NATURAL, majorKey: 'E', minorKey: 'e' },
-  { value: 'F', label: 'F', index: 8, spelling: NATURAL, majorKey: 'F', minorKey: 'f' },
-  { value: 'F#', label: 'F#', index: 9, spelling: SHARP, majorKey: 'F#', minorKey: 'f#' },
-  { value: 'Gb', label: 'Gb', index: 9, spelling: FLAT, majorKey: 'Gb', minorKey: null },
-  { value: 'G', label: 'G', index: 10, spelling: NATURAL, majorKey: 'G', minorKey: 'g' },
-  { value: 'G#', label: 'G#', index: 11, spelling: SHARP, majorKey: null, minorKey: 'g#' },
-  { value: 'Ab', label: 'Ab', index: 11, spelling: FLAT, majorKey: 'Ab', minorKey: 'ab' },
-  { value: 'A', label: 'A', index: 0, spelling: NATURAL, majorKey: 'A', minorKey: 'a' },
-  { value: 'A#', label: 'A#', index: 1, spelling: SHARP, majorKey: null, minorKey: 'a#' },
-  { value: 'Bb', label: 'Bb', index: 1, spelling: FLAT, majorKey: 'Bb', minorKey: 'bb' },
-  { value: 'B', label: 'B', index: 2, spelling: NATURAL, majorKey: 'B', minorKey: 'b' },
-  { value: 'Cb', label: 'Cb', index: 2, spelling: FLAT, majorKey: 'Cb', minorKey: null },
-];
-
-export const TECHNIQUE_TYPES = {
-  SCALE: 'scale',
-  TRIAD: 'triad',
-  SEVENTH: 'seventh',
-  ARPEGGIO: 'arpeggio',
-};
-
-export const HANDS = {
-  RIGHT: 'right',
-  LEFT: 'left',
-  TOGETHER: 'together',
-};
-
-export const DIRECTIONS = {
-  UP: 'up',
-  DOWN: 'down',
-  BOTH: 'both',
-};
-
-export const KEY_ORDERS = {
-  CHROMATIC: 'chromatic',
-  FIFTHS: 'fifths',
-  ACCIDENTALS: 'accidentals',
-};
-
-export const CHORD_PRESENTATION = {
-  SOLID: 'solid',
-  BROKEN: 'broken',
-  BOTH: 'both',
-};
-
-export const ARPEGGIO_PRESENTATION = {
-  ROOT_ONLY: 'root-only',
-  ROOT_AND_INVERSIONS: 'root-and-inversions',
-};
-
-export const SCALE_OPTIONS = [
-  { value: scaleTypes.MAJOR, label: 'Major' },
-  { value: scaleTypes.MINOR_N, label: 'Natural Minor' },
-  { value: scaleTypes.MINOR_H, label: 'Harmonic Minor' },
-  { value: scaleTypes.MINOR_M, label: 'Melodic Minor' },
-];
-
-export const TRIAD_OPTIONS = [
-  { value: 'major', label: 'Major', intervals: [0, 4, 7] },
-  { value: 'minor', label: 'Minor', intervals: [0, 3, 7] },
-  { value: 'diminished', label: 'Diminished', intervals: [0, 3, 6] },
-  { value: 'augmented', label: 'Augmented', intervals: [0, 4, 8] },
-];
-
-export const SEVENTH_OPTIONS = [
-  { value: 'major7', label: 'Major 7th', intervals: [0, 4, 7, 11] },
-  { value: 'dominant7', label: 'Dominant 7th', intervals: [0, 4, 7, 10] },
-  { value: 'minor7', label: 'Minor 7th', intervals: [0, 3, 7, 10] },
-  { value: 'halfDiminished7', label: 'Half-diminished 7th', intervals: [0, 3, 6, 10] },
-  { value: 'diminished7', label: 'Diminished 7th', intervals: [0, 3, 6, 9] },
-];
-
-function arpeggioOption(group, option) {
-  return {
-    ...option,
-    value: `${group}-${option.value}`,
-    label: group === 'triad' ? `${option.label} Triad` : option.label,
-    chordSize: group === 'triad' ? 3 : 4,
-  };
-}
-
-const TRIAD_ARPEGGIO_OPTIONS = TRIAD_OPTIONS.map((option) => arpeggioOption('triad', option));
-const SEVENTH_ARPEGGIO_OPTIONS = SEVENTH_OPTIONS.map((option) => arpeggioOption('seventh', option));
-const ALL_ARPEGGIO_OPTIONS = [
-  ...TRIAD_ARPEGGIO_OPTIONS,
-  ...SEVENTH_ARPEGGIO_OPTIONS,
-];
-
-export const ARPEGGIO_OPTIONS = [
-  TRIAD_ARPEGGIO_OPTIONS[0],
-  TRIAD_ARPEGGIO_OPTIONS[1],
-  // TODO: Implement diminished triad arpeggios before re-enabling.
-  // TRIAD_ARPEGGIO_OPTIONS[2],
-  // TODO: Implement augmented triad arpeggios before re-enabling.
-  // TRIAD_ARPEGGIO_OPTIONS[3],
-];
-
-export const DURATION_OPTIONS = [
-  { value: 2, label: 'Half notes' },
-  { value: 4, label: 'Quarter notes' },
-  { value: 8, label: 'Eighth notes' },
-  { value: 16, label: 'Sixteenth notes' },
-];
-
-const DEFAULT_STAFF_SIZE_MM = 1.7;
-const TECHNIQUES_PER_RENDER_DOCUMENT = 1;
-const DOUBLE_BARLINE_SEPARATOR = ' || ';
-const DEFAULT_TECHNIQUE_ORDER = ['scales', 'triads', 'sevenths', 'arpeggios'];
-
-export const DISPLAY_SIZE_OPTIONS = [
-  { value: 1, label: 'Default', staffSizeMm: DEFAULT_STAFF_SIZE_MM },
-  { value: 1.25, label: '25% larger', staffSizeMm: DEFAULT_STAFF_SIZE_MM * 1.25 },
-  { value: 1.5, label: '50% larger', staffSizeMm: DEFAULT_STAFF_SIZE_MM * 1.5 },
-];
-
-// Fill this section with the finished fingering rules as you settle them.
-// Arpeggio entries can use the legacy hand-level shape or an inversion-level
-// shape, for example { rootPosition: arpeggioSpec(...), firstInversion: ... }.
-// The generator reads these values today, using conservative defaults so the
-// page continues to render while the full table is being authored.
-export const FINGERING_DEFINITIONS = {
-  triads: {
-    major: makeTriadFingerings(),
-    minor: makeTriadFingerings(),
-    diminished: makeTriadFingerings(),
-    augmented: makeTriadFingerings(),
-  },
-  seventhChords: {
-    major7: makeSeventhChordFingerings(),
-    dominant7: makeSeventhChordFingerings(),
-    minor7: makeSeventhChordFingerings(),
-    halfDiminished7: makeSeventhChordFingerings(),
-    diminished7: makeSeventhChordFingerings(),
-  },
-  triadArpeggios: {
-    major: {
-      default: makeTriadArpeggioFingerings(),
-      keys: majorTriadArpeggioKeys(),
-    },
-    minor: {
-      default: makeTriadArpeggioFingerings(),
-      keys: minorTriadArpeggioKeys(),
-    },
-    diminished: {
-      default: makeTriadArpeggioFingerings(),
-      keys: {},
-    },
-    augmented: {
-      default: makeTriadArpeggioFingerings(),
-      keys: {},
-    },
-  },
-  seventhArpeggios: {
-    major7: {
-      default: makeSeventhArpeggioFingerings(),
-      keys: {},
-    },
-    dominant7: {
-      default: makeSeventhArpeggioFingerings(),
-      keys: {},
-    },
-    minor7: {
-      default: makeSeventhArpeggioFingerings(),
-      keys: {},
-    },
-    halfDiminished7: {
-      default: makeSeventhArpeggioFingerings(),
-      keys: {},
-    },
-    diminished7: {
-      default: makeSeventhArpeggioFingerings(),
-      keys: {},
-    },
-  },
-};
-
-export const DEFAULT_SETTINGS = {
-  technique: TECHNIQUE_TYPES.SCALE,
-  key: 'C',
-  scaleType: scaleTypes.MAJOR,
-  triadQuality: 'major',
-  seventhQuality: 'dominant7',
-  arpeggioQuality: 'triad-major',
-  hand: HANDS.RIGHT,
-  octaves: 2,
-  duration: 8,
-  direction: DIRECTIONS.BOTH,
-  renderMode: RENDER_MODES.KEY_SIGNATURE,
-  displayScale: 1,
-  showFingerings: true,
-};
-
-export const DEFAULT_COLLECTION_SETTINGS = {
-  title: 'Technique Collection',
-  hand: HANDS.RIGHT,
-  octaves: 2,
-  duration: 8,
-  direction: DIRECTIONS.BOTH,
-  renderMode: RENDER_MODES.KEY_SIGNATURE,
-  displayScale: 1,
-  showFingerings: true,
-  showDetails: false,
-  keyOrder: KEY_ORDERS.CHROMATIC,
-  pairRelativeKeys: false,
-  groupByKey: false,
-  includeScales: true,
-  includeTriads: false,
-  includeSevenths: false,
-  includeArpeggios: false,
-  triadPresentation: CHORD_PRESENTATION.BOTH,
-  seventhPresentation: CHORD_PRESENTATION.BOTH,
-  arpeggioPresentation: ARPEGGIO_PRESENTATION.ROOT_ONLY,
-};
-
-const HAND_CONFIG = {
-  [HANDS.RIGHT]: {
-    clef: 'treble',
-    baseOctave: 4,
-    rootOctave: 4,
-    fingeringPosition: 'above',
-  },
-  [HANDS.LEFT]: {
-    clef: 'bass',
-    baseOctave: 3,
-    rootOctave: 3,
-    fingeringPosition: 'below',
-  },
-};
+// Re-export definitions so existing imports from this module continue to work.
+export * from './techniqueDefinitions.js';
+export { FINGERING_DEFINITIONS } from './fingeringDefinitions.js';
 
 const pcFromNoteIndex = (index) => (index - 3 + 12) % 12;
 const noteIndexFromPc = (pc) => (pc + 3) % 12;
@@ -268,349 +65,6 @@ function noteFromPitch(pitch) {
 
 const LEFT_HAND_TREBLE_MIN_PITCH = pitchFromNote(5, 4);
 const SCALE_CLEF_CHANGE_GROUP_SIZE = 4;
-const LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
-const LETTER_BASE_INDEX = {
-  A: 0,
-  B: 2,
-  C: 3,
-  D: 5,
-  E: 7,
-  F: 8,
-  G: 10,
-};
-const KEY_SIGNATURE_COUNTS = {
-  C: 0,
-  G: 1,
-  D: 2,
-  A: 3,
-  E: 4,
-  B: 5,
-  'F#': 6,
-  'C#': 7,
-  F: -1,
-  Bb: -2,
-  Eb: -3,
-  Ab: -4,
-  Db: -5,
-  Gb: -6,
-  Cb: -7,
-  a: 0,
-  e: 1,
-  b: 2,
-  'f#': 3,
-  'c#': 4,
-  'g#': 5,
-  'd#': 6,
-  'a#': 7,
-  d: -1,
-  g: -2,
-  c: -3,
-  f: -4,
-  bb: -5,
-  eb: -6,
-  ab: -7,
-};
-const KEY_SIGNATURE_SHARP_ORDER = ['F', 'C', 'G', 'D', 'A', 'E', 'B'];
-const KEY_SIGNATURE_FLAT_ORDER = ['B', 'E', 'A', 'D', 'G', 'C', 'F'];
-
-// Each entry pairs a major key with its relative minor in chromatic root order.
-const CHROMATIC_KEY_PAIRS = [
-  { major: 'C',  minor: 'A'  },
-  { major: 'C#', minor: 'A#' },
-  { major: 'Db', minor: 'Bb' },
-  { major: 'D',  minor: 'B'  },
-  { major: 'Eb', minor: 'C'  },
-  { major: 'E',  minor: 'C#' },
-  { major: 'F',  minor: 'D'  },
-  { major: 'F#', minor: 'D#' },
-  { major: 'Gb', minor: 'Eb' },
-  { major: 'G',  minor: 'E'  },
-  { major: 'Ab', minor: 'F'  },
-  { major: 'A',  minor: 'F#' },
-  { major: 'Bb', minor: 'G'  },
-  { major: 'B',  minor: 'G#' },
-  { major: 'Cb', minor: 'Ab' },
-];
-
-// Circle of fifths: each major key followed by its relative minor (0 acc → 7#/7b).
-const FIFTHS_KEY_PAIRS = [
-  { major: 'C',  minor: 'A'  },
-  { major: 'G',  minor: 'E'  },
-  { major: 'D',  minor: 'B'  },
-  { major: 'A',  minor: 'F#' },
-  { major: 'E',  minor: 'C#' },
-  { major: 'B',  minor: 'G#' },
-  { major: 'F#', minor: 'D#' },
-  { major: 'C#', minor: 'A#' },
-  { major: 'F',  minor: 'D'  },
-  { major: 'Bb', minor: 'G'  },
-  { major: 'Eb', minor: 'C'  },
-  { major: 'Ab', minor: 'F'  },
-  { major: 'Db', minor: 'Bb' },
-  { major: 'Gb', minor: 'Eb' },
-  { major: 'Cb', minor: 'Ab' },
-];
-
-// Least to most accidentals: C (0), then alternating 1#/1b, 2#/2b, …, 7#/7b.
-const ACCIDENTALS_KEY_PAIRS = [
-  { major: 'C',  minor: 'A'  },
-  { major: 'G',  minor: 'E'  },
-  { major: 'F',  minor: 'D'  },
-  { major: 'D',  minor: 'B'  },
-  { major: 'Bb', minor: 'G'  },
-  { major: 'A',  minor: 'F#' },
-  { major: 'Eb', minor: 'C'  },
-  { major: 'E',  minor: 'C#' },
-  { major: 'Ab', minor: 'F'  },
-  { major: 'B',  minor: 'G#' },
-  { major: 'Db', minor: 'Bb' },
-  { major: 'F#', minor: 'D#' },
-  { major: 'Gb', minor: 'Eb' },
-  { major: 'C#', minor: 'A#' },
-  { major: 'Cb', minor: 'Ab' },
-];
-
-function makeTriadFingerings() {
-  return {
-    right: {
-      rootPosition: [1, 3, 5],
-      firstInversion: [1, 2, 5],
-      secondInversion: [1, 3, 5],
-    },
-    left: {
-      rootPosition: [5, 3, 1],
-      firstInversion: [5, 3, 1],
-      secondInversion: [5, 2, 1],
-    },
-  };
-}
-
-function makeArpeggioFingerings(firstOctave, subsequentOctaves, finalRoot) {
-  return {
-    firstOctave,
-    subsequentOctaves,
-    finalRoot,
-  };
-}
-
-function makeSeventhChordFingerings() {
-  return {
-    right: {
-      rootPosition: [1, 2, 4, 5],
-      firstInversion: [1, 2, 4, 5],
-      secondInversion: [1, 2, 3, 5],
-      thirdInversion: [1, 2, 4, 5],
-    },
-    left: {
-      rootPosition: [5, 4, 2, 1],
-      firstInversion: [5, 4, 2, 1],
-      secondInversion: [5, 3, 2, 1],
-      thirdInversion: [5, 4, 2, 1],
-    },
-  };
-}
-
-function makeTriadArpeggioFingerings() {
-  return {
-    right: {
-      standard: makeArpeggioFingerings([1, 2, 3], [1, 2, 3], 5),
-    },
-    left: {
-      standard: makeArpeggioFingerings([5, 4, 2], [1, 4, 2], 1),
-    },
-  };
-}
-
-function makeSeventhArpeggioFingerings() {
-  return {
-    right: {
-      standard: makeArpeggioFingerings([1, 2, 3, 4], [1, 2, 3, 4], 5),
-    },
-    left: {
-      standard: makeArpeggioFingerings([5, 4, 3, 2], [5, 4, 3, 2], 1),
-    },
-  };
-}
-
-function arpeggioSpec(rightFirst, rightSubsequent, leftFirst, leftSubsequent, rightFinal = 5, leftFinal = 1) {
-  return {
-    right: {
-      standard: makeArpeggioFingerings(rightFirst, rightSubsequent, rightFinal),
-    },
-    left: {
-      standard: makeArpeggioFingerings(leftFirst, leftSubsequent, leftFinal),
-    },
-  };
-}
-
-function triadArpeggioSpec(rootPosition, firstInversion = rootPosition, secondInversion = rootPosition) {
-  return {
-    rootPosition,
-    firstInversion,
-    secondInversion,
-  };
-}
-
-function majorTriadArpeggioKeys() {
-  return {
-    C: triadArpeggioSpec(
-      arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 4, 2], [1, 4, 2]),
-      arpeggioSpec([1, 2, 4], [1, 2, 4], [5, 4, 2], [1, 4, 2]),
-      arpeggioSpec([1, 2, 4], [1, 2, 4], [5, 3, 2], [1, 3, 2]),
-    ),
-    'C#': triadArpeggioSpec(
-      arpeggioSpec([4, 1, 2], [4, 1, 2], [2, 1, 4], [2, 1, 4], 4, 2),
-      arpeggioSpec([1, 2, 4], [1, 2, 4], [5, 4, 2], [1, 4, 2]),
-      arpeggioSpec([2, 4, 1], [2, 4, 1], [4, 2, 1], [4, 2, 1], 2, 4),
-    ),
-    Db: triadArpeggioSpec(
-      arpeggioSpec([4, 1, 2], [4, 1, 2], [2, 1, 4], [2, 1, 4], 4, 2),
-      arpeggioSpec([1, 2, 4], [1, 2, 4], [5, 4, 2], [1, 4, 2]),
-      arpeggioSpec([2, 4, 1], [2, 4, 1], [4, 2, 1], [4, 2, 1], 2, 4),
-    ),
-    D: triadArpeggioSpec(
-      arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 4, 2], [1, 4, 2]),
-      arpeggioSpec([4, 1, 2], [4, 1, 2], [3, 2, 1], [3, 2, 1], 4, 3),
-      arpeggioSpec([1, 2, 4], [1, 2, 4], [5, 3, 2], [1, 3, 2]),
-    ),
-    Eb: triadArpeggioSpec(
-      arpeggioSpec([4, 1, 2], [4, 1, 2], [2, 1, 4], [2, 1, 4], 4, 2),
-      arpeggioSpec([1, 2, 4], [1, 2, 4], [5, 4, 2], [1, 4, 2]),
-      arpeggioSpec([2, 4, 1], [2, 4, 1], [4, 2, 1], [4, 2, 1], 2, 4),
-    ),
-    E: triadArpeggioSpec(
-      arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 4, 2], [1, 4, 2]),
-      arpeggioSpec([4, 1, 2], [4, 1, 2], [3, 2, 1], [3, 2, 1], 4, 3),
-      arpeggioSpec([1, 2, 4], [1, 2, 4], [5, 3, 2], [1, 3, 2]),
-    ),
-    F: triadArpeggioSpec(
-      arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 4, 2], [1, 4, 2]),
-      arpeggioSpec([1, 2, 4], [1, 2, 4], [5, 4, 2], [1, 4, 2]),
-      arpeggioSpec([1, 2, 4], [1, 2, 4], [5, 3, 2], [1, 3, 2]),
-    ),
-    'F#': triadArpeggioSpec(
-      arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 4, 2], [1, 4, 2]),
-      arpeggioSpec([1, 2, 4], [1, 2, 4], [5, 4, 2], [1, 4, 2]),
-      arpeggioSpec([1, 2, 4], [1, 2, 4], [5, 3, 2], [1, 3, 2]),
-    ),
-    Gb: triadArpeggioSpec(
-      arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 4, 2], [1, 4, 2]),
-      arpeggioSpec([1, 2, 4], [1, 2, 4], [5, 4, 2], [1, 4, 2]),
-      arpeggioSpec([1, 2, 4], [1, 2, 4], [5, 3, 2], [1, 3, 2]),
-    ),
-    G: triadArpeggioSpec(
-      arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 4, 2], [1, 4, 2]),
-      arpeggioSpec([1, 2, 4], [1, 2, 4], [5, 4, 2], [1, 4, 2]),
-      arpeggioSpec([1, 2, 4], [1, 2, 4], [5, 3, 2], [1, 3, 2]),
-    ),
-    Ab: triadArpeggioSpec(
-      arpeggioSpec([4, 1, 2], [4, 1, 2], [2, 1, 4], [2, 1, 4], 4, 2),
-      arpeggioSpec([1, 2, 4], [1, 2, 4], [5, 4, 2], [1, 4, 2]),
-      arpeggioSpec([2, 4, 1], [2, 4, 1], [4, 2, 1], [4, 2, 1], 2, 4),
-    ),
-    A: triadArpeggioSpec(
-      arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 4, 2], [1, 4, 2]),
-      arpeggioSpec([4, 1, 2], [4, 1, 2], [3, 2, 1], [3, 2, 1], 4, 3),
-      arpeggioSpec([1, 2, 4], [1, 2, 4], [5, 3, 2], [1, 3, 2]),
-    ),
-    Bb: triadArpeggioSpec(
-      arpeggioSpec([4, 1, 2], [4, 1, 2], [4, 2, 1], [4, 2, 1], 4, 4),
-      arpeggioSpec([1, 2, 4], [1, 2, 4], [5, 4, 2], [1, 4, 2]),
-      arpeggioSpec([1, 2, 4], [1, 2, 4], [5, 3, 2], [1, 3, 2]),
-    ),
-    B: triadArpeggioSpec(
-      arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 3, 2], [1, 3, 2]),
-      arpeggioSpec([2, 3, 1], [2, 3, 1], [3, 2, 1], [3, 2, 1], 2, 3),
-      arpeggioSpec([3, 1, 2], [3, 1, 2], [2, 1, 3], [2, 1, 3], 3, 2),
-    ),
-    Cb: triadArpeggioSpec(
-      arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 3, 2], [1, 3, 2]),
-      arpeggioSpec([2, 3, 1], [2, 3, 1], [3, 2, 1], [3, 2, 1], 2, 3),
-      arpeggioSpec([3, 1, 2], [3, 1, 2], [2, 1, 3], [2, 1, 3], 3, 2),
-    ),
-  };
-}
-
-function minorTriadArpeggioKeys() {
-  return {
-    C: triadArpeggioSpec(
-      arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 4, 2], [1, 4, 2]),
-      arpeggioSpec([3, 1, 2], [3, 1, 2], [4, 2, 1], [4, 2, 1], 3, 4),
-      arpeggioSpec([1, 2, 4], [1, 2, 4], [5, 3, 2], [1, 3, 2]),
-    ),
-    'C#': triadArpeggioSpec(
-      arpeggioSpec([4, 1, 2], [4, 1, 2], [2, 1, 4], [2, 1, 4], 4, 2),
-      arpeggioSpec([1, 2, 4], [1, 2, 4], [5, 4, 2], [1, 4, 2]),
-      arpeggioSpec([2, 4, 1], [2, 4, 1], [4, 2, 1], [4, 2, 1], 2, 4),
-    ),
-    D: triadArpeggioSpec(
-      arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 4, 2], [1, 4, 2]),
-      arpeggioSpec([1, 2, 4], [1, 2, 4], [5, 4, 2], [1, 4, 2]),
-      arpeggioSpec([1, 2, 4], [1, 2, 4], [5, 3, 2], [1, 3, 2]),
-    ),
-    'D#': triadArpeggioSpec(
-      arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 4, 2], [1, 4, 2]),
-      arpeggioSpec([1, 2, 4], [1, 2, 4], [5, 4, 2], [1, 4, 2]),
-      arpeggioSpec([1, 2, 4], [1, 2, 4], [5, 3, 2], [1, 3, 2]),
-    ),
-    Eb: triadArpeggioSpec(
-      arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 4, 2], [1, 4, 2]),
-      arpeggioSpec([1, 2, 4], [1, 2, 4], [5, 4, 2], [1, 4, 2]),
-      arpeggioSpec([1, 2, 4], [1, 2, 4], [5, 3, 2], [1, 3, 2]),
-    ),
-    E: triadArpeggioSpec(
-      arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 4, 2], [1, 4, 2]),
-      arpeggioSpec([1, 2, 4], [1, 2, 4], [5, 4, 2], [1, 4, 2]),
-      arpeggioSpec([1, 2, 4], [1, 2, 4], [5, 3, 2], [1, 3, 2]),
-    ),
-    F: triadArpeggioSpec(
-      arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 4, 2], [1, 4, 2]),
-      arpeggioSpec([3, 1, 2], [3, 1, 2], [4, 2, 1], [4, 2, 1], 3, 4),
-      arpeggioSpec([1, 2, 4], [1, 2, 4], [5, 3, 2], [1, 3, 2]),
-    ),
-    'F#': triadArpeggioSpec(
-      arpeggioSpec([4, 1, 2], [4, 1, 2], [2, 1, 4], [2, 1, 4], 4, 2),
-      arpeggioSpec([1, 2, 4], [1, 2, 4], [5, 4, 2], [1, 4, 2]),
-      arpeggioSpec([2, 4, 1], [2, 4, 1], [4, 2, 1], [4, 2, 1], 2, 4),
-    ),
-    G: triadArpeggioSpec(
-      arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 4, 2], [1, 4, 2]),
-      arpeggioSpec([3, 1, 2], [3, 1, 2], [4, 2, 1], [4, 2, 1], 3, 4),
-      arpeggioSpec([1, 2, 4], [1, 2, 4], [5, 3, 2], [1, 3, 2]),
-    ),
-    'G#': triadArpeggioSpec(
-      arpeggioSpec([4, 1, 2], [4, 1, 2], [2, 1, 4], [2, 1, 4], 4, 2),
-      arpeggioSpec([1, 2, 4], [1, 2, 4], [5, 4, 2], [1, 4, 2]),
-      arpeggioSpec([2, 4, 1], [2, 4, 1], [4, 2, 1], [4, 2, 1], 2, 4),
-    ),
-    Ab: triadArpeggioSpec(
-      arpeggioSpec([4, 1, 2], [4, 1, 2], [2, 1, 4], [2, 1, 4], 4, 2),
-      arpeggioSpec([1, 2, 4], [1, 2, 4], [5, 4, 2], [1, 4, 2]),
-      arpeggioSpec([2, 4, 1], [2, 4, 1], [4, 2, 1], [4, 2, 1], 2, 4),
-    ),
-    A: triadArpeggioSpec(
-      arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 4, 2], [1, 4, 2]),
-      arpeggioSpec([1, 2, 4], [1, 2, 4], [5, 4, 2], [1, 4, 2]),
-      arpeggioSpec([1, 2, 4], [1, 2, 4], [5, 3, 2], [1, 3, 2]),
-    ),
-    'A#': triadArpeggioSpec(
-      arpeggioSpec([2, 3, 1], [2, 3, 1], [3, 2, 1], [3, 2, 1], 2, 3),
-      arpeggioSpec([3, 1, 2], [3, 1, 2], [2, 1, 3], [2, 1, 3], 3, 2),
-      arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 3, 2], [1, 3, 2]),
-    ),
-    Bb: triadArpeggioSpec(
-      arpeggioSpec([2, 3, 1], [2, 3, 1], [3, 2, 1], [3, 2, 1], 2, 3),
-      arpeggioSpec([3, 1, 2], [3, 1, 2], [2, 1, 3], [2, 1, 3], 3, 2),
-      arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 3, 2], [1, 3, 2]),
-    ),
-    B: triadArpeggioSpec(
-      arpeggioSpec([1, 2, 3], [1, 2, 3], [5, 4, 2], [1, 4, 2]),
-      arpeggioSpec([1, 2, 4], [1, 2, 4], [5, 4, 2], [1, 4, 2]),
-      arpeggioSpec([3, 1, 2], [3, 1, 2], [2, 1, 4], [2, 1, 4], 3, 2),
-    ),
-  };
-}
-
 function getOption(options, value) {
   return options.find((option) => option.value === value) ?? options[0];
 }
@@ -702,29 +156,6 @@ function getScaleDirection(direction) {
   return scaleDirection.BOTH;
 }
 
-function typstEscape(value) {
-  return String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-}
-
-function typstString(value) {
-  return `"${typstEscape(value)}"`;
-}
-
-function typstContent(value) {
-  return String(value)
-    .replace(/\\/g, '\\\\')
-    .replace(/\[/g, '\\[')
-    .replace(/\]/g, '\\]');
-}
-
-function formatDuration(duration) {
-  return Number(duration) || 8;
-}
-
-function solidChordDuration(duration) {
-  return Math.min(formatDuration(duration), 4);
-}
-
 function techniqueDuration(settings) {
   if (settings.technique === TECHNIQUE_TYPES.TRIAD || settings.technique === TECHNIQUE_TYPES.SEVENTH) {
     return solidChordDuration(settings.duration);
@@ -747,124 +178,6 @@ function effectiveOctaves(settings) {
   }
 
   return 1;
-}
-
-function finalScaleDuration(duration) {
-  return Math.min(formatDuration(duration), 4);
-}
-
-function finalArpeggioDuration(duration) {
-  return Math.min(formatDuration(duration), 4);
-}
-
-function formatAccidental(note) {
-  const accidental = note.slice(1);
-  return accidental
-    .replace(/x/g, '##')
-    .replace(/#/g, '#')
-    .replace(/bb/g, '&&')
-    .replace(/b/g, '&');
-}
-
-function keySignatureAccidentals(key) {
-  const count = KEY_SIGNATURE_COUNTS[key] ?? 0;
-  const accidentalsByLetter = {};
-
-  if (count > 0) {
-    KEY_SIGNATURE_SHARP_ORDER.slice(0, count).forEach((letter) => {
-      accidentalsByLetter[letter] = 1;
-    });
-  } else if (count < 0) {
-    KEY_SIGNATURE_FLAT_ORDER.slice(0, Math.abs(count)).forEach((letter) => {
-      accidentalsByLetter[letter] = -1;
-    });
-  }
-
-  return accidentalsByLetter;
-}
-
-function pitchOffsetForLetter(index, letter) {
-  let offset = index - LETTER_BASE_INDEX[letter];
-  while (offset > 6) offset -= 12;
-  while (offset < -6) offset += 12;
-  return offset;
-}
-
-function accidentalTokenForOffset(offset) {
-  if (offset === 2) return '##';
-  if (offset === 1) return '#';
-  if (offset === 0) return '=';
-  if (offset === -1) return '&';
-  if (offset === -2) return '&&';
-  return '';
-}
-
-function accidentalForKeySignature(index, letter, keySignature) {
-  const actualOffset = pitchOffsetForLetter(index, letter);
-  const signatureOffset = keySignature[letter] ?? 0;
-  return actualOffset === signatureOffset ? '' : accidentalTokenForOffset(actualOffset);
-}
-
-function accidentalForWrittenPitch(index, letter) {
-  const offset = pitchOffsetForLetter(index, letter);
-  return offset === 0 ? '' : accidentalTokenForOffset(offset);
-}
-
-function formatNoteName(index, octave, spelling, baseOctave) {
-  const named = noteName(index, spelling);
-  const letter = named.charAt(0).toLowerCase();
-  const accidental = formatAccidental(named);
-  const octaveShift = octave - baseOctave;
-  const octaveMarks =
-    octaveShift > 0 ? "'".repeat(octaveShift) : ','.repeat(Math.abs(octaveShift));
-
-  return `${letter}${accidental}${octaveMarks}`;
-}
-
-function formatLetterName(letter, octave, baseOctave, accidental = '') {
-  const octaveShift = octave - baseOctave;
-  const octaveMarks =
-    octaveShift > 0 ? "'".repeat(octaveShift) : ','.repeat(Math.abs(octaveShift));
-
-  return `${letter.toLowerCase()}${accidental}${octaveMarks}`;
-}
-
-function formatNoteTokenName(note, context) {
-  if (context.useKeySignature) {
-    const letter = note.letter ?? noteName(note.index, NATURAL).charAt(0);
-    return formatLetterName(letter, note.octave, context.baseOctave, note.accidental ?? '');
-  }
-
-  if (note.letter) {
-    return formatLetterName(note.letter, note.octave, context.baseOctave, note.accidental);
-  }
-
-  return formatNoteName(note.index, note.octave, context.spelling, context.baseOctave);
-}
-
-function formatFingering(fingering, position, showFingerings) {
-  if (!showFingerings || fingering == null) return '';
-  const values = Array.isArray(fingering) ? fingering : [fingering];
-  const body = values.join(' ');
-  return position === 'below' ? `n_[${body}]` : `n[${body}]`;
-}
-
-function noteToken(note, context) {
-  const duration = formatDuration(note.duration ?? context.duration);
-  const name = formatNoteTokenName(note, context);
-  const fingering = formatFingering(
-    note.fingering,
-    context.fingeringPosition,
-    context.showFingerings,
-  );
-
-  return `${name}${duration}${fingering}`;
-}
-
-function chordToken(notes, fingering, context) {
-  const names = notes.map((note) => formatNoteTokenName(note, context));
-  const fingers = formatFingering(fingering, context.fingeringPosition, context.showFingerings);
-  return `<${names.join(' ')}>${formatDuration(context.duration)}${fingers}`;
 }
 
 function withDirection(items, direction) {
@@ -1017,10 +330,6 @@ function contextForClef(context, clef) {
     ...context,
     baseOctave: clef === 'treble' ? HAND_CONFIG[HANDS.RIGHT].baseOctave : HAND_CONFIG[HANDS.LEFT].baseOctave,
   };
-}
-
-function musicLine(tokens, separator = ' ') {
-  return tokens.join(separator);
 }
 
 function roundedClefBoundaries(items, pitchForItem, groupSize) {
@@ -1644,16 +953,6 @@ function stavesForSettings(settings) {
       fingeringPosition: config.fingeringPosition,
     };
   });
-}
-
-function formatTypstStaves(staves) {
-  return staves
-    .map((staff) => `(
-      clef: ${typstString(staff.clef)},
-      fingering-position: ${typstString(staff.fingeringPosition)},
-      music: ${typstString(staff.music)},
-    )`)
-    .join(',\n');
 }
 
 function stavesForSettingsGroup(settingsGroup, options = {}) {
@@ -2283,17 +1582,6 @@ export function collectionEntriesForSettings(collectionSettings) {
     addEntriesForTechnique(entries, collectionSettings, sectionId);
   });
   return entries;
-}
-
-function typstDocument(body, options = {}) {
-  const margin = options.compact ? '(x: 7mm, y: 1mm)' : '7mm';
-
-  return `#import "scorify/lib.typ": score
-
-#set page(width: 255mm, height: auto, margin: ${margin})
-#set text(size: 10pt)
-
-${body}`;
 }
 
 function settingsGroupForEntry(entry) {
