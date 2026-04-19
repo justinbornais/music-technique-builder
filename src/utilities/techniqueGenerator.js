@@ -1573,6 +1573,10 @@ function collectionEntriesGroupedByKey(collectionSettings) {
 }
 
 export function collectionEntriesForSettings(collectionSettings) {
+  if (collectionSettings.customEntries) {
+    return collectionSettings.customEntries;
+  }
+
   if (collectionSettings.groupByKey) {
     return collectionEntriesGroupedByKey(collectionSettings);
   }

@@ -14,6 +14,7 @@ import {
   TRIAD_OPTIONS,
   SEVENTH_OPTIONS,
   ARPEGGIO_OPTIONS,
+  TECHNIQUE_TYPES,
   buildTechniqueCollectionDocument,
   collectionEntriesForSettings,
 } from '../utilities/techniqueGenerator.js';
@@ -214,6 +215,26 @@ const ToggleField = React.memo(function ToggleField({ id, label, checked, onChan
 const ALL_MAJOR_KEYS = KEY_OPTIONS.filter((k) => k.majorKey).map((k) => k.value);
 const ALL_MINOR_KEYS = KEY_OPTIONS.filter((k) => k.minorKey).map((k) => k.value);
 
+const scaleNameOverrides = {
+  major: 'Major',
+  minor_n: 'Minor Natural',
+  minor_h: 'Minor Harmonic',
+  minor_m: 'Minor Melodic',
+};
+
+function entryOrderLabel(entry) {
+  if (entry?.settings?.technique !== TECHNIQUE_TYPES.SCALE) {
+    return entry.title;
+  }
+
+  const keyLabel = KEY_OPTIONS.find((option) => option.value === entry.settings.key)?.label ?? entry.settings.key;
+  const scaleName = scaleNameOverrides[entry.settings.scaleType]
+    ?? SCALE_OPTIONS.find((option) => option.value === entry.settings.scaleType)?.label
+    ?? 'Scale';
+
+  return `${keyLabel} ${scaleName} Scale`;
+}
+
 const KeyChipSelector = React.memo(function KeyChipSelector({ allKeys, selectedKeys, onToggle, onSelectAll, onSelectNone }) {
   return (
     <div>
@@ -402,9 +423,9 @@ export default function TechniqueCollectionBuilder() {
   const [customSettings, setCustomSettings] = useState({
     ...DEFAULT_COLLECTION_SETTINGS,
     includeScales: true,
-    includeTriads: false,
-    includeSevenths: false,
-    includeArpeggios: false,
+    includeTriads: true,
+    includeSevenths: true,
+    includeArpeggios: true,
   });
   const [customSectionOrder, setCustomSectionOrder] = useState(
     CUSTOM_SECTIONS.map((s) => s.id),
@@ -431,6 +452,9 @@ export default function TechniqueCollectionBuilder() {
   const renderId = useRef(0);
   const resultCache = useRef(new Map());
   const dragItem = useRef(null);
+  const dragEntryItem = useRef(null);
+  const [customEntryOrder, setCustomEntryOrder] = useState(null);
+  const [showEntryOrder, setShowEntryOrder] = useState(false);
 
   // Build effective settings from preset + shared
   const pendingSettings = useMemo(() => {
@@ -445,6 +469,31 @@ export default function TechniqueCollectionBuilder() {
     }
     return presetToSettings(activePreset, sharedSettings);
   }, [activePreset, sharedSettings, customSettings, customSectionOrder]);
+
+  // Preview entries for custom mode entry reordering
+  const previewEntries = useMemo(() => {
+    if (activePreset !== PRESETS.CUSTOM) return [];
+    return collectionEntriesForSettings(pendingSettings);
+  }, [activePreset, pendingSettings]);
+
+  // Reset entry order when the set of entries changes
+  const entryFingerprint = useMemo(
+    () => previewEntries.map((e) => e.title).join('\n'),
+    [previewEntries],
+  );
+  const prevEntryFingerprint = useRef(entryFingerprint);
+  useEffect(() => {
+    if (entryFingerprint !== prevEntryFingerprint.current) {
+      setCustomEntryOrder(null);
+      prevEntryFingerprint.current = entryFingerprint;
+    }
+  }, [entryFingerprint]);
+
+  // Ordered preview entries for display
+  const orderedPreviewEntries = useMemo(() => {
+    if (!customEntryOrder) return previewEntries.map((e, i) => ({ ...e, originalIndex: i }));
+    return customEntryOrder.map((i) => ({ ...previewEntries[i], originalIndex: i }));
+  }, [previewEntries, customEntryOrder]);
 
   const document = useMemo(
     () => committedSettings ? buildTechniqueCollectionDocument(committedSettings) : null,
@@ -467,9 +516,14 @@ export default function TechniqueCollectionBuilder() {
   }, []);
 
   const handleGenerate = useCallback(() => {
-    setCommittedSettings(pendingSettings);
+    if (activePreset === PRESETS.CUSTOM && customEntryOrder) {
+      const reorderedEntries = customEntryOrder.map((i) => previewEntries[i]);
+      setCommittedSettings({ ...pendingSettings, customEntries: reorderedEntries });
+    } else {
+      setCommittedSettings(pendingSettings);
+    }
     setHasPendingChanges(false);
-  }, [pendingSettings]);
+  }, [pendingSettings, activePreset, customEntryOrder, previewEntries]);
 
   const exportTypst = useCallback(() => {
     if (!document) return;
@@ -511,6 +565,40 @@ export default function TechniqueCollectionBuilder() {
 
   const handleDragEnd = useCallback(() => {
     dragItem.current = null;
+  }, []);
+
+  // Entry-level drag handlers for custom mode
+  const handleEntryDragStart = useCallback((e, index) => {
+    dragEntryItem.current = index;
+    e.dataTransfer.effectAllowed = 'move';
+  }, []);
+
+  const handleEntryDragOver = useCallback((e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  }, []);
+
+  const handleEntryDrop = useCallback((e, targetIndex) => {
+    e.preventDefault();
+    const sourceIndex = dragEntryItem.current;
+    if (sourceIndex === null || sourceIndex === targetIndex) return;
+    setCustomEntryOrder((current) => {
+      const order = current ?? previewEntries.map((_, i) => i);
+      const next = [...order];
+      const [moved] = next.splice(sourceIndex, 1);
+      next.splice(targetIndex, 0, moved);
+      return next;
+    });
+    setHasPendingChanges(true);
+  }, [previewEntries]);
+
+  const handleEntryDragEnd = useCallback(() => {
+    dragEntryItem.current = null;
+  }, []);
+
+  const resetEntryOrder = useCallback(() => {
+    setCustomEntryOrder(null);
+    setHasPendingChanges(true);
   }, []);
 
   // Key toggling for custom mode  
@@ -710,30 +798,45 @@ export default function TechniqueCollectionBuilder() {
     .filter(Boolean);
 
   return (
-    <main className="technique-shell">
+    <>
+      <nav className="top-navbar">
+        <div className="navbar-brand">
+          <p className="eyebrow">Technique Collection</p>
+          <h1>{displayTitle}</h1>
+        </div>
+
+        <div className="navbar-presets">
+          <div className="preset-tabs">
+            {presetTabs.map((tab) => (
+              <button
+                key={tab.value}
+                type="button"
+                className={`preset-tab${activePreset === tab.value ? ' active' : ''}`}
+                onClick={() => handlePresetChange(tab.value)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="navbar-actions">
+          <a className="text-link navbar-link" href="/single-technique">Single technique →</a>
+          <button
+            type="button"
+            className="navbar-generate-btn"
+            onClick={handleGenerate}
+            disabled={!hasPendingChanges}
+          >
+            {committedSettings === null ? 'Generate' : 'Regenerate'}
+          </button>
+        </div>
+      </nav>
+
+      <main className="technique-shell">
       <section className="workbench" aria-label="Technique collection generator">
         <div className="controls">
           <div className="controls-inner">
-            <div className="brandline">
-              <p className="eyebrow">Technique Collection</p>
-              <h1>{displayTitle}</h1>
-              <a className="text-link" href="/single-technique">Single technique →</a>
-            </div>
-
-            {/* Preset Tabs */}
-            <div className="preset-tabs">
-              {presetTabs.map((tab) => (
-                <button
-                  key={tab.value}
-                  type="button"
-                  className={`preset-tab${activePreset === tab.value ? ' active' : ''}`}
-                  onClick={() => handlePresetChange(tab.value)}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-
             {/* Shared Controls */}
             <p className="section-label">Settings</p>
             <div className="control-grid">
@@ -849,6 +952,49 @@ export default function TechniqueCollectionBuilder() {
                     }}
                   />
                 ))}
+
+                {/* Entry-level reordering */}
+                {previewEntries.length > 0 && (
+                  <>
+                    <div className="entry-order-header">
+                      <span
+                        className="section-label entry-order-toggle"
+                        onClick={() => setShowEntryOrder((v) => !v)}
+                      >
+                        Technique Order ({previewEntries.length})
+                        <ChevronIcon open={showEntryOrder} />
+                      </span>
+                      {customEntryOrder && (
+                        <button
+                          type="button"
+                          className="key-chip-action"
+                          onClick={resetEntryOrder}
+                        >
+                          Reset
+                        </button>
+                      )}
+                    </div>
+                    {showEntryOrder && (
+                      <div className="entry-order-list">
+                        {orderedPreviewEntries.map((entry, index) => (
+                          <div
+                            key={`${entry.title}-${entry.originalIndex}`}
+                            className={`entry-order-item${dragEntryItem.current === index ? ' dragging' : ''}`}
+                            draggable
+                            onDragStart={(e) => handleEntryDragStart(e, index)}
+                            onDragOver={handleEntryDragOver}
+                            onDrop={(e) => handleEntryDrop(e, index)}
+                            onDragEnd={handleEntryDragEnd}
+                          >
+                            <DragIcon />
+                            <span className="entry-order-index">{index + 1}</span>
+                            <span className="entry-order-title">{entryOrderLabel(entry)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
               </>
             )}
 
@@ -859,9 +1005,6 @@ export default function TechniqueCollectionBuilder() {
               </button>
               <button type="button" onClick={exportTypst} disabled={!committedSettings}>
                 Export
-              </button>
-              <button type="button" onClick={handleGenerate} disabled={!hasPendingChanges}>
-                {committedSettings === null ? 'Generate' : 'Regenerate'}
               </button>
             </div>
           </div>
@@ -905,6 +1048,7 @@ export default function TechniqueCollectionBuilder() {
           )}
         </div>
       </section>
-    </main>
+      </main>
+    </>
   );
 }
