@@ -5,6 +5,7 @@ import {
   DIRECTIONS,
   DISPLAY_SIZE_OPTIONS,
   DURATION_OPTIONS,
+  FOUR_NOTE_CHORD_OPTIONS,
   HANDS,
   RENDER_MODES,
   SCALE_OPTIONS,
@@ -18,7 +19,9 @@ import { renderTypstSvg, warmTypstRenderer } from '../utilities/typstRenderer.js
 
 const techniqueOptions = [
   { value: TECHNIQUE_TYPES.SCALE, label: 'Scales' },
+  { value: TECHNIQUE_TYPES.CHROMATIC, label: 'Chromatic Scale' },
   { value: TECHNIQUE_TYPES.TRIAD, label: 'Triads' },
+  { value: TECHNIQUE_TYPES.FOUR_NOTE_CHORD, label: '4 Note Chords' },
   { value: TECHNIQUE_TYPES.SEVENTH, label: '7th Chords' },
   { value: TECHNIQUE_TYPES.ARPEGGIO, label: 'Arpeggios' },
 ];
@@ -186,6 +189,15 @@ export default function TechniqueBuilder() {
                 onChange={(value) => updateSetting('triadQuality', value)}
               />
             )}
+            {pendingSettings.technique === TECHNIQUE_TYPES.FOUR_NOTE_CHORD && (
+              <SelectField
+                id="fourNoteChordQuality"
+                label="4 Note Chord"
+                value={pendingSettings.fourNoteChordQuality}
+                options={FOUR_NOTE_CHORD_OPTIONS}
+                onChange={(value) => updateSetting('fourNoteChordQuality', value)}
+              />
+            )}
             {pendingSettings.technique === TECHNIQUE_TYPES.SEVENTH && (
               <SelectField
                 id="seventhQuality"
@@ -225,13 +237,15 @@ export default function TechniqueBuilder() {
               options={DURATION_OPTIONS}
               onChange={(value) => updateSetting('duration', Number(value))}
             />
-            <SelectField
-              id="renderMode"
-              label="Notation"
-              value={pendingSettings.renderMode}
-              options={renderModeOptions}
-              onChange={(value) => updateSetting('renderMode', value)}
-            />
+            {pendingSettings.technique !== TECHNIQUE_TYPES.CHROMATIC && (
+              <SelectField
+                id="renderMode"
+                label="Notation"
+                value={pendingSettings.renderMode}
+                options={renderModeOptions}
+                onChange={(value) => updateSetting('renderMode', value)}
+              />
+            )}
             <SelectField
               id="displayScale"
               label="Display size"
@@ -239,7 +253,7 @@ export default function TechniqueBuilder() {
               options={DISPLAY_SIZE_OPTIONS}
               onChange={(value) => updateSetting('displayScale', Number(value))}
             />
-            {pendingSettings.technique === TECHNIQUE_TYPES.SCALE && (
+            {(pendingSettings.technique === TECHNIQUE_TYPES.SCALE || pendingSettings.technique === TECHNIQUE_TYPES.CHROMATIC) && (
               <SelectField
                 id="octaves"
                 label="Octaves"
@@ -257,6 +271,26 @@ export default function TechniqueBuilder() {
               checked={pendingSettings.showFingerings}
               onChange={(value) => updateSetting('showFingerings', value)}
             />
+            {(
+              pendingSettings.technique === TECHNIQUE_TYPES.TRIAD
+              || pendingSettings.technique === TECHNIQUE_TYPES.FOUR_NOTE_CHORD
+              || pendingSettings.technique === TECHNIQUE_TYPES.SEVENTH
+            ) && (
+              <ToggleField
+                id="solidChordRest"
+                label="Rest after chords"
+                checked={Boolean(pendingSettings.solidChordRest)}
+                onChange={(value) => updateSetting('solidChordRest', value)}
+              />
+            )}
+            {pendingSettings.technique === TECHNIQUE_TYPES.FOUR_NOTE_CHORD && (
+              <ToggleField
+                id="brokenChord"
+                label="Broken chord"
+                checked={Boolean(pendingSettings.brokenChord)}
+                onChange={(value) => updateSetting('brokenChord', value)}
+              />
+            )}
           </div>
 
           <div className="action-row">

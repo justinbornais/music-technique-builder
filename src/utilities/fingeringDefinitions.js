@@ -38,6 +38,23 @@ function makeSeventhChordFingerings() {
   };
 }
 
+function makeFourNoteChordFingerings() {
+  return {
+    right: {
+      rootPosition: [1, 2, 4, 5],
+      firstInversion: [1, 2, 4, 5],
+      secondInversion: [1, 2, 4, 5],
+      thirdInversion: [1, 2, 4, 5],
+    },
+    left: {
+      rootPosition: [5, 4, 2, 1],
+      firstInversion: [5, 4, 2, 1],
+      secondInversion: [5, 4, 2, 1],
+      thirdInversion: [5, 4, 2, 1],
+    },
+  };
+}
+
 function makeTriadArpeggioFingerings() {
   return {
     right: {
@@ -250,6 +267,12 @@ export const FINGERING_DEFINITIONS = {
     minor: makeTriadFingerings(),
     diminished: makeTriadFingerings(),
     augmented: makeTriadFingerings(),
+  },
+  fourNoteChords: {
+    major: makeFourNoteChordFingerings(),
+    minor: makeFourNoteChordFingerings(),
+    diminished: makeFourNoteChordFingerings(),
+    augmented: makeFourNoteChordFingerings(),
   },
   seventhChords: {
     major7: makeSeventhChordFingerings(),

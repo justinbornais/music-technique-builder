@@ -35,7 +35,9 @@ export const KEY_OPTIONS = [
 
 export const TECHNIQUE_TYPES = {
   SCALE: 'scale',
+  CHROMATIC: 'chromatic',
   TRIAD: 'triad',
+  FOUR_NOTE_CHORD: 'four-note-chord',
   SEVENTH: 'seventh',
   ARPEGGIO: 'arpeggio',
 };
@@ -62,6 +64,7 @@ export const CHORD_PRESENTATION = {
   SOLID: 'solid',
   BROKEN: 'broken',
   BOTH: 'both',
+  SOLID_WITH_REST: 'solid-with-rest',
 };
 
 export const ARPEGGIO_PRESENTATION = {
@@ -82,6 +85,8 @@ export const TRIAD_OPTIONS = [
   { value: 'diminished', label: 'Diminished', intervals: [0, 3, 6] },
   { value: 'augmented', label: 'Augmented', intervals: [0, 4, 8] },
 ];
+
+export const FOUR_NOTE_CHORD_OPTIONS = TRIAD_OPTIONS;
 
 export const SEVENTH_OPTIONS = [
   { value: 'major7', label: 'Major 7th', intervals: [0, 4, 7, 11] },
@@ -110,6 +115,7 @@ export const ALL_ARPEGGIO_OPTIONS = [
 export const ARPEGGIO_OPTIONS = [
   TRIAD_ARPEGGIO_OPTIONS[0],
   TRIAD_ARPEGGIO_OPTIONS[1],
+  ...SEVENTH_ARPEGGIO_OPTIONS,
   // TODO: Implement diminished triad arpeggios before re-enabling.
   // TRIAD_ARPEGGIO_OPTIONS[2],
   // TODO: Implement augmented triad arpeggios before re-enabling.
@@ -126,7 +132,7 @@ export const DURATION_OPTIONS = [
 const DEFAULT_STAFF_SIZE_MM = 1.7;
 export const TECHNIQUES_PER_RENDER_DOCUMENT = 1;
 export const DOUBLE_BARLINE_SEPARATOR = ' || ';
-export const DEFAULT_TECHNIQUE_ORDER = ['scales', 'triads', 'sevenths', 'arpeggios'];
+export const DEFAULT_TECHNIQUE_ORDER = ['scales', 'triads', 'fourNoteChords', 'sevenths', 'arpeggios', 'seventhArpeggios'];
 
 export const DISPLAY_SIZE_OPTIONS = [
   { value: 1, label: 'Default', staffSizeMm: DEFAULT_STAFF_SIZE_MM },
@@ -139,6 +145,7 @@ export const DEFAULT_SETTINGS = {
   key: 'C',
   scaleType: scaleTypes.MAJOR,
   triadQuality: 'major',
+  fourNoteChordQuality: 'major',
   seventhQuality: 'dominant7',
   arpeggioQuality: 'triad-major',
   hand: HANDS.RIGHT,
@@ -165,9 +172,12 @@ export const DEFAULT_COLLECTION_SETTINGS = {
   groupByKey: false,
   includeScales: true,
   includeTriads: false,
+  includeFourNoteChords: false,
   includeSevenths: false,
   includeArpeggios: false,
+  includeSeventhArpeggios: false,
   triadPresentation: CHORD_PRESENTATION.BOTH,
+  fourNoteChordPresentation: CHORD_PRESENTATION.BOTH,
   seventhPresentation: CHORD_PRESENTATION.BOTH,
   arpeggioPresentation: ARPEGGIO_PRESENTATION.ROOT_ONLY,
 };

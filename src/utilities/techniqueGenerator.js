@@ -13,6 +13,7 @@ import {
   DISPLAY_SIZE_OPTIONS,
   DOUBLE_BARLINE_SEPARATOR,
   DURATION_OPTIONS,
+  FOUR_NOTE_CHORD_OPTIONS,
   HAND_CONFIG,
   HANDS,
   KEY_OPTIONS,
@@ -64,7 +65,94 @@ function noteFromPitch(pitch) {
 }
 
 const LEFT_HAND_TREBLE_MIN_PITCH = pitchFromNote(5, 4);
+const RIGHT_HAND_8VA_MIN_PITCH = pitchFromNote(10, 6);
 const SCALE_CLEF_CHANGE_GROUP_SIZE = 4;
+
+// ─── Chromatic scale helpers ───
+
+// Ascending chromatic spellings: black keys use sharps
+const ASCENDING_CHROMATIC_SPELLINGS = [
+  { letter: 'C', accidental: '' },
+  { letter: 'C', accidental: '#' },
+  { letter: 'D', accidental: '' },
+  { letter: 'D', accidental: '#' },
+  { letter: 'E', accidental: '' },
+  { letter: 'F', accidental: '' },
+  { letter: 'F', accidental: '#' },
+  { letter: 'G', accidental: '' },
+  { letter: 'G', accidental: '#' },
+  { letter: 'A', accidental: '' },
+  { letter: 'A', accidental: '#' },
+  { letter: 'B', accidental: '' },
+];
+
+// Descending chromatic spellings: black keys use flats
+const DESCENDING_CHROMATIC_SPELLINGS = [
+  { letter: 'C', accidental: '' },
+  { letter: 'D', accidental: '&' },
+  { letter: 'D', accidental: '' },
+  { letter: 'E', accidental: '&' },
+  { letter: 'E', accidental: '' },
+  { letter: 'F', accidental: '' },
+  { letter: 'G', accidental: '&' },
+  { letter: 'G', accidental: '' },
+  { letter: 'A', accidental: '&' },
+  { letter: 'A', accidental: '' },
+  { letter: 'B', accidental: '&' },
+  { letter: 'B', accidental: '' },
+];
+
+// Pitch classes that correspond to black keys (C=0)
+const CHROMATIC_BLACK_KEY_PCS = new Set([1, 3, 6, 8, 10]);
+
+/**
+ * Return the fingering for one note in a chromatic scale.
+ * - Black keys always get finger 3.
+ * - At white-white adjacencies (E→F, B→C ascending; F→E, C→B descending)
+ *   RH uses "1 2" and LH uses "2 1" for the pair.
+ * - All other white keys get finger 1.
+ */
+function chromaticFingeringForNote(pc, prevPc, nextPc, rh, ascending) {
+  if (CHROMATIC_BLACK_KEY_PCS.has(pc)) return 3;
+
+  if (ascending) {
+    // Second of white-white pair: F following E, or C following B
+    if ((prevPc === 4 && pc === 5) || (prevPc === 11 && pc === 0)) return rh ? 2 : 1;
+    // First of white-white pair: E before F, or B before C
+    if ((pc === 4 && nextPc === 5) || (pc === 11 && nextPc === 0)) return rh ? 1 : 2;
+  } else {
+    // Descending: second of pair is E after F, or B after C
+    if ((prevPc === 5 && pc === 4) || (prevPc === 0 && pc === 11)) return rh ? 1 : 2;
+    // First of pair descending: F before E, or C before B
+    if ((pc === 5 && nextPc === 4) || (pc === 0 && nextPc === 11)) return rh ? 2 : 1;
+  }
+
+  return 1;
+}
+
+function generateChromaticAscendingNotes(startPc, startOctave, octaves) {
+  const notes = [];
+  let octave = startOctave;
+  for (let step = 0; step <= octaves * 12; step++) {
+    const pc = (startPc + step) % 12;
+    if (step > 0 && pc === 0) octave += 1;
+    const { letter, accidental } = ASCENDING_CHROMATIC_SPELLINGS[pc];
+    notes.push({ pc, letter, accidental, octave, pitch: octave * 12 + pc });
+  }
+  return notes;
+}
+
+function generateChromaticDescendingNotes(startPc, startOctave, octaves) {
+  const notes = [];
+  let octave = startOctave + octaves;
+  for (let step = 0; step <= octaves * 12; step++) {
+    const pc = ((startPc - step) % 12 + 12) % 12;
+    if (step > 0 && pc === 11) octave -= 1;
+    const { letter, accidental } = DESCENDING_CHROMATIC_SPELLINGS[pc];
+    notes.push({ pc, letter, accidental, octave, pitch: octave * 12 + pc });
+  }
+  return notes;
+}
 function getOption(options, value) {
   return options.find((option) => option.value === value) ?? options[0];
 }
@@ -125,6 +213,7 @@ function selectedSpelling(settings) {
 }
 
 function shouldUseKeySignature(settings) {
+  if (settings.technique === TECHNIQUE_TYPES.CHROMATIC) return false;
   return settings.renderMode === RENDER_MODES.KEY_SIGNATURE;
 }
 
@@ -135,6 +224,10 @@ function usesMinorKeySignature(settings) {
 
   if (settings.technique === TECHNIQUE_TYPES.TRIAD) {
     return settings.triadQuality === 'minor' || settings.triadQuality === 'diminished';
+  }
+
+  if (settings.technique === TECHNIQUE_TYPES.FOUR_NOTE_CHORD) {
+    return settings.fourNoteChordQuality === 'minor' || settings.fourNoteChordQuality === 'diminished';
   }
 
   if (settings.technique === TECHNIQUE_TYPES.SEVENTH) {
@@ -157,7 +250,11 @@ function getScaleDirection(direction) {
 }
 
 function techniqueDuration(settings) {
-  if (settings.technique === TECHNIQUE_TYPES.TRIAD || settings.technique === TECHNIQUE_TYPES.SEVENTH) {
+  if (
+    settings.technique === TECHNIQUE_TYPES.TRIAD
+    || settings.technique === TECHNIQUE_TYPES.FOUR_NOTE_CHORD
+    || settings.technique === TECHNIQUE_TYPES.SEVENTH
+  ) {
     return solidChordDuration(settings.duration);
   }
 
@@ -169,7 +266,7 @@ function clampScaleOctaves(octaves) {
 }
 
 function effectiveOctaves(settings) {
-  if (settings.technique === TECHNIQUE_TYPES.SCALE) {
+  if (settings.technique === TECHNIQUE_TYPES.SCALE || settings.technique === TECHNIQUE_TYPES.CHROMATIC) {
     return clampScaleOctaves(settings.octaves);
   }
 
@@ -567,6 +664,64 @@ function getScaleNotesForSettings(settings, keyOption, hand, spelling, useKeySig
   );
 }
 
+function chromaticScaleMusicForHand(settings, hand) {
+  const handConfig = HAND_CONFIG[hand];
+  const isRightHand = hand === HANDS.RIGHT;
+  const keyOption = selectedKeyOption(settings);
+  const startPc = pcFromNoteIndex(keyOption.index);
+  const startOctave = scaleRootOctaveForKey(keyOption, handConfig.rootOctave);
+  const octaves = clampScaleOctaves(settings.octaves);
+
+  const ascRaw = generateChromaticAscendingNotes(startPc, startOctave, octaves);
+  const descRaw = generateChromaticDescendingNotes(startPc, startOctave, octaves);
+
+  let notes;
+  let isAscMap;
+
+  if (settings.direction === DIRECTIONS.UP) {
+    notes = ascRaw;
+    isAscMap = notes.map(() => true);
+  } else if (settings.direction === DIRECTIONS.DOWN) {
+    notes = descRaw;
+    isAscMap = notes.map(() => false);
+  } else {
+    // BOTH: ascending then descending, skip duplicate top note
+    notes = [...ascRaw, ...descRaw.slice(1)];
+    const ascLen = ascRaw.length;
+    isAscMap = notes.map((_, i) => i < ascLen);
+  }
+
+  const context = {
+    ...handConfig,
+    duration: Number(settings.duration),
+    showFingerings: settings.showFingerings,
+    useKeySignature: false,
+  };
+
+  const notesWithMeta = notes.map((note, index) => {
+    const prevPc = index > 0 ? notes[index - 1].pc : null;
+    const nextPc = index < notes.length - 1 ? notes[index + 1].pc : null;
+    const asc = isAscMap[index];
+    return {
+      ...note,
+      fingering: chromaticFingeringForNote(note.pc, prevPc, nextPc, isRightHand, asc),
+      duration: index === notes.length - 1
+        ? finalScaleDuration(settings.duration)
+        : formatDuration(settings.duration),
+    };
+  });
+
+  const tokens = tokensWithLeftHandClefs(
+    notesWithMeta,
+    context,
+    (note, activeContext) => noteToken(note, activeContext),
+    (note) => note.pitch,
+    { roundToGroupSize: SCALE_CLEF_CHANGE_GROUP_SIZE },
+  );
+
+  return musicLine(tokens);
+}
+
 function scaleMusicForHand(settings, hand) {
   const handConfig = HAND_CONFIG[hand];
   const keyOption = selectedKeyOption(settings);
@@ -729,12 +884,170 @@ function brokenSeventhMusicForHand(settings, hand, option) {
   return musicLine(tokens, '  ');
 }
 
+function buildFourNoteChordNotes(rootPitch, rootLetter, rootOctave, intervals, position, settings) {
+  const triadNotes = spelledInversionChord(
+    rootPitch,
+    intervals,
+    position,
+    rootLetter,
+    rootOctave,
+    settings,
+  );
+  return [...triadNotes, noteInWrittenOctave(triadNotes[0], 1)];
+}
+
+function fourNoteChordGroupsForHand(settings, hand, option) {
+  const handConfig = HAND_CONFIG[hand];
+  const keyOption = selectedKeyOption(settings);
+  const rootLetter = keyOption.value.charAt(0).toUpperCase();
+  const rootOctave = triadRootOctaveForKey(keyOption, handConfig.rootOctave);
+  const rootPitch = pitchFromNote(keyOption.index, rootOctave);
+  const quality = option.value;
+  const positionCount = option.intervals.length + 1;
+
+  const ascending = Array.from({ length: positionCount }, (_, position) => {
+    const notes = buildFourNoteChordNotes(
+      rootPitch,
+      rootLetter,
+      rootOctave,
+      option.intervals,
+      position,
+      settings,
+    );
+    const fingering = chordFingering('fourNoteChords', quality, hand, position, 4);
+
+    return {
+      notes: notes.map((note, index) => ({
+        ...note,
+        fingering: fingering[index],
+      })),
+      position,
+    };
+  });
+  const descending = [...ascending].reverse().map((group) => ({
+    ...group,
+    notes: [...group.notes].reverse().map((note) => ({ ...note })),
+  }));
+
+  if (settings.direction === DIRECTIONS.UP) return ascending;
+  if (settings.direction === DIRECTIONS.DOWN) return descending;
+  return [...ascending, ...descending];
+}
+
+function brokenFourNoteChordMusicForHand(settings, hand, option) {
+  const handConfig = HAND_CONFIG[hand];
+  const groups = fourNoteChordGroupsForHand(settings, hand, option);
+  const context = {
+    ...handConfig,
+    spelling: selectedSpelling(settings),
+    duration: Number(settings.duration),
+    showFingerings: settings.showFingerings,
+    useKeySignature: shouldUseKeySignature(settings),
+  };
+  const tokens = brokenTriadTokens(groups, settings, context);
+
+  return musicLine(tokens, '  ');
+}
+
+function fourNoteChordMusicForHand(settings, hand) {
+  const handConfig = HAND_CONFIG[hand];
+  const option = getOption(FOUR_NOTE_CHORD_OPTIONS, settings.fourNoteChordQuality);
+
+  if (settings.brokenChord) {
+    return brokenFourNoteChordMusicForHand(settings, hand, option);
+  }
+
+  const spelling = selectedSpelling(settings);
+  const keyOption = selectedKeyOption(settings);
+  const rootOctave = triadRootOctaveForKey(keyOption, handConfig.rootOctave);
+  const rootPitch = pitchFromNote(keyOption.index, rootOctave);
+  const rootLetter = keyOption.value.charAt(0).toUpperCase();
+  const totalPositions = effectiveOctaves(settings) * option.intervals.length + 1;
+  const chords = Array.from({ length: totalPositions }, (_, index) => ({
+    notes: buildFourNoteChordNotes(
+      rootPitch,
+      rootLetter,
+      rootOctave,
+      option.intervals,
+      index,
+      settings,
+    ),
+    position: index,
+  }));
+  const directed = withDirection(chords, settings.direction);
+  const context = {
+    ...handConfig,
+    spelling,
+    duration: settings.solidChordRest ? 4 : solidChordDuration(settings.duration),
+    showFingerings: settings.showFingerings,
+    useKeySignature: shouldUseKeySignature(settings),
+  };
+
+  let tokens;
+  if (hand === HANDS.LEFT) {
+    tokens = directed.map((chord) => chordToken(
+      chord.notes,
+      chordFingering('fourNoteChords', settings.fourNoteChordQuality, hand, chord.position, 4),
+      context,
+    ));
+  } else {
+    tokens = tokensWithLeftHandClefs(
+      directed,
+      context,
+      (chord, activeContext) => chordToken(
+        chord.notes,
+        chordFingering('fourNoteChords', settings.fourNoteChordQuality, hand, chord.position, 4),
+        activeContext,
+      ),
+      (chord) => pitchForChord(chord.notes),
+    );
+  }
+
+  if (settings.solidChordRest) tokens = addRestsAfterChords(tokens);
+
+  return musicLine(tokens);
+}
+
 function noteInWrittenOctave(note, octaveOffset) {
   return {
     ...note,
     pitch: note.pitch + octaveOffset * 12,
     octave: note.octave + octaveOffset,
   };
+}
+
+function noteInOttavaWrittenOctave(note) {
+  return {
+    ...note,
+    octave: note.octave - 1,
+  };
+}
+
+function tokensWithRightHandOttava(notes, context) {
+  const tokens = [];
+  let ottavaTokens = [];
+
+  const flushOttava = () => {
+    if (ottavaTokens.length === 0) return;
+    tokens.push(`8a{ ${ottavaTokens.join(' ')} }`);
+    ottavaTokens = [];
+  };
+
+  notes.forEach((note) => {
+    const useOttava = note.pitch > RIGHT_HAND_8VA_MIN_PITCH;
+    const token = noteToken(useOttava ? noteInOttavaWrittenOctave(note) : note, context);
+
+    if (useOttava) {
+      ottavaTokens.push(token);
+      return;
+    }
+
+    flushOttava();
+    tokens.push(token);
+  });
+
+  flushOttava();
+  return tokens;
 }
 
 function buildArpeggioNotes(settings, handConfig, option, octaves, inversion) {
@@ -805,9 +1118,32 @@ function arpeggioMusicForHand(settings, hand) {
         : formatDuration(settings.duration),
     };
   });
-  const tokens = arpeggioNotes.map((note) => noteToken(note, context));
+
+  let tokens;
+  if (hand === HANDS.LEFT && option.chordSize === 4) {
+    tokens = tokensWithLeftHandClefs(
+      arpeggioNotes,
+      context,
+      (note, activeContext) => noteToken(note, activeContext),
+      pitchForNote,
+      { roundToGroupSize: option.chordSize },
+    );
+  } else if (hand === HANDS.RIGHT && option.chordSize === 4) {
+    tokens = tokensWithRightHandOttava(arpeggioNotes, context);
+  } else {
+    tokens = arpeggioNotes.map((note) => noteToken(note, context));
+  }
 
   return musicLine(tokens);
+}
+
+function addRestsAfterChords(tokens) {
+  const result = [];
+  for (const t of tokens) {
+    result.push(t);
+    if (t !== 'treble' && t !== 'bass') result.push('r4');
+  }
+  return result;
 }
 
 function chordMusicForHand(settings, hand, options, quality) {
@@ -838,46 +1174,57 @@ function chordMusicForHand(settings, hand, options, quality) {
   const context = {
     ...handConfig,
     spelling,
-    duration: solidChordDuration(settings.duration),
+    duration: settings.solidChordRest ? 4 : solidChordDuration(settings.duration),
     showFingerings: settings.showFingerings,
     useKeySignature: shouldUseKeySignature(settings),
   };
 
+  let tokens;
   if (
     hand === HANDS.LEFT
     && [TECHNIQUE_TYPES.TRIAD, TECHNIQUE_TYPES.SEVENTH].includes(settings.technique)
   ) {
     const fingeringGroup = option.intervals.length === 4 ? 'seventhChords' : 'triads';
-    const tokens = directed.map((chord) => chordToken(
+    tokens = directed.map((chord) => chordToken(
       chord.notes,
       chordFingering(fingeringGroup, quality, hand, chord.position, option.intervals.length),
       context,
     ));
-    return musicLine(tokens);
+  } else {
+    tokens = tokensWithLeftHandClefs(
+      directed,
+      context,
+      (chord, activeContext) => chordToken(
+        chord.notes,
+        chordFingering(
+          option.intervals.length === 4 ? 'seventhChords' : 'triads',
+          quality,
+          hand,
+          chord.position,
+          option.intervals.length,
+        ),
+        activeContext,
+      ),
+      (chord) => pitchForChord(chord.notes),
+    );
   }
 
-  const tokens = tokensWithLeftHandClefs(
-    directed,
-    context,
-    (chord, activeContext) => chordToken(
-      chord.notes,
-      chordFingering(
-        option.intervals.length === 4 ? 'seventhChords' : 'triads',
-        quality,
-        hand,
-        chord.position,
-        option.intervals.length,
-      ),
-      activeContext,
-    ),
-    (chord) => pitchForChord(chord.notes),
-  );
+  if (settings.solidChordRest) tokens = addRestsAfterChords(tokens);
+
   return musicLine(tokens);
 }
 
 function musicForHand(settings, hand) {
   if (settings.technique === TECHNIQUE_TYPES.SCALE) {
     return scaleMusicForHand(settings, hand);
+  }
+
+  if (settings.technique === TECHNIQUE_TYPES.CHROMATIC) {
+    return chromaticScaleMusicForHand(settings, hand);
+  }
+
+  if (settings.technique === TECHNIQUE_TYPES.FOUR_NOTE_CHORD) {
+    return fourNoteChordMusicForHand(settings, hand);
   }
 
   if (settings.technique === TECHNIQUE_TYPES.ARPEGGIO) {
@@ -896,8 +1243,16 @@ function qualityLabel(settings) {
     return getOption(SCALE_OPTIONS, settings.scaleType).label;
   }
 
+  if (settings.technique === TECHNIQUE_TYPES.CHROMATIC) {
+    return 'Chromatic Scale';
+  }
+
   if (settings.technique === TECHNIQUE_TYPES.SEVENTH) {
     return getOption(SEVENTH_OPTIONS, settings.seventhQuality).label;
+  }
+
+  if (settings.technique === TECHNIQUE_TYPES.FOUR_NOTE_CHORD) {
+    return `${getOption(FOUR_NOTE_CHORD_OPTIONS, settings.fourNoteChordQuality).label} 4 Note Chords`;
   }
 
   if (settings.technique === TECHNIQUE_TYPES.ARPEGGIO) {
@@ -959,7 +1314,8 @@ function stavesForSettingsGroup(settingsGroup, options = {}) {
   const first = settingsGroup[0];
   const hands = first.hand === HANDS.TOGETHER ? [HANDS.RIGHT, HANDS.LEFT] : [first.hand];
   const needsLeftHandClefReset = settingsGroup.some(
-    (settings) => settings.technique !== TECHNIQUE_TYPES.ARPEGGIO,
+    (settings) => settings.technique !== TECHNIQUE_TYPES.ARPEGGIO
+      || arpeggioOptionForSettings(settings).chordSize === 4,
   );
 
   return hands.map((hand) => {
@@ -1178,12 +1534,13 @@ function addScaleEntriesForKeyOption(entries, collectionSettings, base, keyOptio
   }
 }
 
-function triadSolidSettings(base, qualityOption, keyValue) {
+function triadSolidSettings(base, qualityOption, keyValue, solidChordRest = false) {
   return {
     ...base,
     technique: TECHNIQUE_TYPES.TRIAD,
     triadQuality: qualityOption.value,
     key: keyValue,
+    ...(solidChordRest && { solidChordRest: true }),
   };
 }
 
@@ -1198,10 +1555,14 @@ function triadBrokenSettings(base, qualityOption, keyValue) {
 }
 
 function addTriadEntry(entries, collectionSettings, base, qualityOption, keyValue) {
-  const solid = triadSolidSettings(base, qualityOption, keyValue);
+  const solidChordRest = collectionSettings.triadPresentation === CHORD_PRESENTATION.SOLID_WITH_REST;
+  const solid = triadSolidSettings(base, qualityOption, keyValue, solidChordRest);
   const broken = triadBrokenSettings(base, qualityOption, keyValue);
 
-  if (collectionSettings.triadPresentation === CHORD_PRESENTATION.SOLID) {
+  if (
+    collectionSettings.triadPresentation === CHORD_PRESENTATION.SOLID
+    || collectionSettings.triadPresentation === CHORD_PRESENTATION.SOLID_WITH_REST
+  ) {
     entries.push({ settings: solid, title: techniqueLabel(solid) });
     return;
   }
@@ -1222,6 +1583,108 @@ function addTriadEntry(entries, collectionSettings, base, qualityOption, keyValu
 
 function isTriadQualityMinorContext(qualityOption) {
   return qualityOption.value === 'minor' || qualityOption.value === 'diminished';
+}
+
+function fourNoteChordSolidSettings(base, qualityOption, keyValue, solidChordRest = false) {
+  return {
+    ...base,
+    technique: TECHNIQUE_TYPES.FOUR_NOTE_CHORD,
+    fourNoteChordQuality: qualityOption.value,
+    key: keyValue,
+    ...(solidChordRest && { solidChordRest: true }),
+  };
+}
+
+function fourNoteChordBrokenSettings(base, qualityOption, keyValue) {
+  return {
+    ...base,
+    technique: TECHNIQUE_TYPES.FOUR_NOTE_CHORD,
+    fourNoteChordQuality: qualityOption.value,
+    brokenChord: true,
+    key: keyValue,
+  };
+}
+
+function addFourNoteChordEntry(entries, collectionSettings, base, qualityOption, keyValue) {
+  const solidChordRest = collectionSettings.fourNoteChordPresentation === CHORD_PRESENTATION.SOLID_WITH_REST;
+  const solid = fourNoteChordSolidSettings(base, qualityOption, keyValue, solidChordRest);
+  const broken = fourNoteChordBrokenSettings(base, qualityOption, keyValue);
+
+  if (
+    collectionSettings.fourNoteChordPresentation === CHORD_PRESENTATION.SOLID
+    || collectionSettings.fourNoteChordPresentation === CHORD_PRESENTATION.SOLID_WITH_REST
+  ) {
+    entries.push({ settings: solid, title: techniqueLabel(solid) });
+    return;
+  }
+
+  if (collectionSettings.fourNoteChordPresentation === CHORD_PRESENTATION.BROKEN) {
+    entries.push({ settings: broken, title: `${techniqueLabel(broken)} - Broken` });
+    return;
+  }
+
+  entries.push({
+    settings: solid,
+    settingsGroup: [broken, solid],
+    techniqueCount: 2,
+    title: techniqueLabel(solid),
+    groupSeparator: DOUBLE_BARLINE_SEPARATOR,
+  });
+}
+
+function addChromaticPairedFourNoteChordEntriesForKeyOption(entries, collectionSettings, base, keyOption) {
+  FOUR_NOTE_CHORD_OPTIONS.forEach((qualityOption) => {
+    const isMinorContext = isTriadQualityMinorContext(qualityOption);
+    if (isMinorContext && !keyOption.minorKey) return;
+    if (!isMinorContext && !keyOption.majorKey) return;
+    if (!isKeyAllowed(keyOption.value, isMinorContext, collectionSettings)) return;
+
+    addFourNoteChordEntry(entries, collectionSettings, base, qualityOption, keyOption.value);
+  });
+}
+
+function addFourNoteChordEntries(entries, collectionSettings) {
+  if (collectionSettings.pairRelativeKeys) {
+    const base = collectionBaseSettings(collectionSettings);
+    getOrderedKeyPairs(collectionSettings.keyOrder).forEach(({ major, minor }) => {
+      const majorKeyOpt = KEY_OPTIONS.find((opt) => opt.value === major && opt.majorKey);
+      const minorKeyOpt = KEY_OPTIONS.find((opt) => opt.value === minor && opt.minorKey);
+
+      FOUR_NOTE_CHORD_OPTIONS.forEach((qualityOption) => {
+        const useMinor = isTriadQualityMinorContext(qualityOption);
+        const keyValue = useMinor ? minor : major;
+        const keyOption = useMinor ? minorKeyOpt : majorKeyOpt;
+        if (!keyOption || !isKeyAllowed(keyValue, useMinor, collectionSettings)) return;
+
+        addFourNoteChordEntry(entries, collectionSettings, base, qualityOption, keyValue);
+      });
+    });
+    return;
+  }
+
+  if (collectionSettings.keyOrder === KEY_ORDERS.CHROMATIC) {
+    const base = collectionBaseSettings(collectionSettings);
+    KEY_OPTIONS.forEach((keyOption) => {
+      addChromaticPairedFourNoteChordEntriesForKeyOption(entries, collectionSettings, base, keyOption);
+    });
+    return;
+  }
+
+  const base = collectionBaseSettings(collectionSettings);
+  FOUR_NOTE_CHORD_OPTIONS.forEach((qualityOption) => {
+    const template = {
+      ...base,
+      technique: TECHNIQUE_TYPES.FOUR_NOTE_CHORD,
+      fourNoteChordQuality: qualityOption.value,
+    };
+    const isMinorContext = usesMinorKeySignature(template);
+    const keyOptions = collectionKeyOptions(template, collectionSettings.keyOrder);
+
+    keyOptions.forEach((keyOption) => {
+      if (!isKeyAllowed(keyOption.value, isMinorContext, collectionSettings)) return;
+      addFourNoteChordEntry(entries, collectionSettings, base, qualityOption, keyOption.value);
+    });
+  });
 }
 
 function addChromaticPairedTriadEntriesForKeyOption(entries, collectionSettings, base, keyOption) {
@@ -1283,12 +1746,13 @@ function addTriadEntries(entries, collectionSettings) {
   });
 }
 
-function seventhSolidSettings(base, qualityOption, keyValue) {
+function seventhSolidSettings(base, qualityOption, keyValue, solidChordRest = false) {
   return {
     ...base,
     technique: TECHNIQUE_TYPES.SEVENTH,
     seventhQuality: qualityOption.value,
     key: keyValue,
+    ...(solidChordRest && { solidChordRest: true }),
   };
 }
 
@@ -1303,21 +1767,26 @@ function seventhBrokenSettings(base, qualityOption, keyValue) {
 }
 
 function addSeventhEntry(entries, collectionSettings, base, qualityOption, keyValue) {
-  const solid = seventhSolidSettings(base, qualityOption, keyValue);
+  const solidChordRest = collectionSettings.seventhPresentation === CHORD_PRESENTATION.SOLID_WITH_REST;
+  const solid = seventhSolidSettings(base, qualityOption, keyValue, solidChordRest);
   const broken = seventhBrokenSettings(base, qualityOption, keyValue);
+  const solidLabel = techniqueLabel(solid);
 
-  if (collectionSettings.seventhPresentation === CHORD_PRESENTATION.SOLID) {
-    entries.push({ settings: solid, title: techniqueLabel(solid) });
+  if (
+    collectionSettings.seventhPresentation === CHORD_PRESENTATION.SOLID
+    || collectionSettings.seventhPresentation === CHORD_PRESENTATION.SOLID_WITH_REST
+  ) {
+    entries.push({ settings: solid, title: solidLabel });
     return;
   }
 
   if (collectionSettings.seventhPresentation === CHORD_PRESENTATION.BROKEN) {
-    entries.push({ settings: broken, title: `${techniqueLabel(broken)} - Broken` });
+    entries.push({ settings: broken, title: `${solidLabel} - Broken` });
     return;
   }
 
-  entries.push({ settings: broken, title: `${techniqueLabel(broken)} - Broken` });
-  entries.push({ settings: solid, title: techniqueLabel(solid) });
+  entries.push({ settings: broken, title: `${solidLabel} - Broken` });
+  entries.push({ settings: solid, title: `${solidLabel} - Solid` });
 }
 
 function isSeventhQualityMinorContext(qualityOption) {
@@ -1325,12 +1794,43 @@ function isSeventhQualityMinorContext(qualityOption) {
   return quality.includes('minor') || quality.includes('diminished');
 }
 
+function isSeventhQualityMinorContextValue(qualityValue) {
+  const quality = String(qualityValue).toLowerCase();
+  return quality.includes('minor') || quality.includes('diminished');
+}
+
+function normalizedSelectionSet(value) {
+  if (value instanceof Set) return value;
+  if (Array.isArray(value)) return new Set(value);
+  return null;
+}
+
+function seventhQualityKeySelections(collectionSettings, arpeggio = false) {
+  const selections = arpeggio
+    ? collectionSettings.allowedSeventhArpeggioKeysByQuality
+    : collectionSettings.allowedSeventhKeysByQuality;
+
+  return selections && typeof selections === 'object' ? selections : null;
+}
+
+function isKeyAllowedForSeventhQuality(keyValue, qualityValue, collectionSettings, arpeggio = false) {
+  const selections = seventhQualityKeySelections(collectionSettings, arpeggio);
+  const selectedKeys = selections ? normalizedSelectionSet(selections[qualityValue]) : null;
+  if (selectedKeys) return selectedKeys.has(keyValue);
+
+  return isKeyAllowed(
+    keyValue,
+    isSeventhQualityMinorContextValue(qualityValue),
+    collectionSettings,
+  );
+}
+
 function addSeventhEntriesForKeyOption(entries, collectionSettings, base, keyOption) {
   SEVENTH_OPTIONS.forEach((qualityOption) => {
     const isMinorContext = isSeventhQualityMinorContext(qualityOption);
     if (isMinorContext && !keyOption.minorKey) return;
     if (!isMinorContext && !keyOption.majorKey) return;
-    if (!isKeyAllowed(keyOption.value, isMinorContext, collectionSettings)) return;
+    if (!isKeyAllowedForSeventhQuality(keyOption.value, qualityOption.value, collectionSettings)) return;
 
     addSeventhEntry(entries, collectionSettings, base, qualityOption, keyOption.value);
   });
@@ -1347,7 +1847,10 @@ function addSeventhEntries(entries, collectionSettings) {
         const useMinor = isSeventhQualityMinorContext(qualityOption);
         const keyValue = useMinor ? minor : major;
         const keyOption = useMinor ? minorKeyOpt : majorKeyOpt;
-        if (!keyOption || !isKeyAllowed(keyValue, useMinor, collectionSettings)) return;
+        if (
+          !keyOption
+          || !isKeyAllowedForSeventhQuality(keyValue, qualityOption.value, collectionSettings)
+        ) return;
 
         addSeventhEntry(entries, collectionSettings, base, qualityOption, keyValue);
       });
@@ -1356,19 +1859,12 @@ function addSeventhEntries(entries, collectionSettings) {
   }
 
   const base = collectionBaseSettings(collectionSettings);
-  SEVENTH_OPTIONS.forEach((qualityOption) => {
-    const template = {
-      ...base,
-      technique: TECHNIQUE_TYPES.SEVENTH,
-      seventhQuality: qualityOption.value,
-    };
-    const isMinorContext = usesMinorKeySignature(template);
-    const keyOptions = collectionKeyOptions(template, collectionSettings.keyOrder);
-
-    keyOptions.forEach((keyOption) => {
-      if (!isKeyAllowed(keyOption.value, isMinorContext, collectionSettings)) return;
-      addSeventhEntry(entries, collectionSettings, base, qualityOption, keyOption.value);
-    });
+  const allKeyOptionsOrdered = [...KEY_OPTIONS].sort(
+    (a, b) => optionOrderIndex(a, collectionSettings.keyOrder, false)
+      - optionOrderIndex(b, collectionSettings.keyOrder, false),
+  );
+  allKeyOptionsOrdered.forEach((keyOption) => {
+    addSeventhEntriesForKeyOption(entries, collectionSettings, base, keyOption);
   });
 }
 
@@ -1382,6 +1878,17 @@ function addArpeggioEntry(entries, collectionSettings, option, rootSettings) {
     ...rootSettings,
     arpeggioInversion: inversion,
   }));
+
+  if (option.chordSize === 4) {
+    entries.push({
+      settings: rootSettings,
+      settingsLines: [settingsGroup.slice(0, 2), settingsGroup.slice(2, 4)],
+      techniqueCount: settingsGroup.length,
+      title: techniqueLabel(rootSettings),
+    });
+    return;
+  }
+
   entries.push({
     settings: rootSettings,
     settingsGroup,
@@ -1412,8 +1919,30 @@ function addArpeggioEntryForKey(entries, collectionSettings, template, option, k
   );
 }
 
+function triadArpeggioOptionsForCollection() {
+  return ARPEGGIO_OPTIONS.filter((option) => option.chordSize === 3);
+}
+
+function seventhArpeggioOptionsForCollection(collectionSettings) {
+  const selectedQualities = Array.isArray(collectionSettings.allowedSeventhArpeggioQualities)
+    ? collectionSettings.allowedSeventhArpeggioQualities
+    : null;
+  const selectedKeysByQuality = seventhQualityKeySelections(collectionSettings, true);
+
+  return ARPEGGIO_OPTIONS.filter((option) => {
+    if (option.chordSize !== 4) return false;
+    const qualityValue = option.value.replace(/^seventh-/, '');
+    if (selectedKeysByQuality) {
+      const selectedKeys = normalizedSelectionSet(selectedKeysByQuality[qualityValue]);
+      return selectedKeys ? selectedKeys.size > 0 : false;
+    }
+    if (!selectedQualities) return true;
+    return selectedQualities.includes(qualityValue);
+  });
+}
+
 function addChromaticPairedArpeggioEntriesForKeyOption(entries, collectionSettings, base, keyOption) {
-  ARPEGGIO_OPTIONS.forEach((option) => {
+  triadArpeggioOptionsForCollection().forEach((option) => {
     const template = arpeggioTemplateForOption(base, option);
     const isMinorContext = usesMinorKeySignature(template);
     if (isMinorContext && !keyOption.minorKey) return;
@@ -1432,6 +1961,33 @@ function addChromaticPairedArpeggioEntries(entries, collectionSettings) {
   });
 }
 
+function addChromaticPairedSeventhArpeggioEntriesForKeyOption(entries, collectionSettings, base, keyOption) {
+  seventhArpeggioOptionsForCollection(collectionSettings).forEach((option) => {
+    const template = arpeggioTemplateForOption(base, option);
+    const isMinorContext = usesMinorKeySignature(template);
+    if (isMinorContext && !keyOption.minorKey) return;
+    if (!isMinorContext && !keyOption.majorKey) return;
+    if (
+      !isKeyAllowedForSeventhQuality(
+        keyOption.value,
+        option.value.replace(/^seventh-/, ''),
+        collectionSettings,
+        true,
+      )
+    ) return;
+
+    addArpeggioEntryForKey(entries, collectionSettings, template, option, keyOption.value);
+  });
+}
+
+function addChromaticPairedSeventhArpeggioEntries(entries, collectionSettings) {
+  const base = collectionBaseSettings(collectionSettings);
+
+  KEY_OPTIONS.forEach((keyOption) => {
+    addChromaticPairedSeventhArpeggioEntriesForKeyOption(entries, collectionSettings, base, keyOption);
+  });
+}
+
 function addArpeggioEntries(entries, collectionSettings) {
   if (collectionSettings.pairRelativeKeys) {
     const base = collectionBaseSettings(collectionSettings);
@@ -1439,7 +1995,7 @@ function addArpeggioEntries(entries, collectionSettings) {
       const majorKeyOpt = KEY_OPTIONS.find((opt) => opt.value === major && opt.majorKey);
       const minorKeyOpt = KEY_OPTIONS.find((opt) => opt.value === minor && opt.minorKey);
 
-      ARPEGGIO_OPTIONS.forEach((option) => {
+      triadArpeggioOptionsForCollection().forEach((option) => {
         const template = arpeggioTemplateForOption(base, option);
         const useMinor = usesMinorKeySignature(template);
         const keyValue = useMinor ? minor : major;
@@ -1458,13 +2014,69 @@ function addArpeggioEntries(entries, collectionSettings) {
   }
 
   const base = collectionBaseSettings(collectionSettings);
-  ARPEGGIO_OPTIONS.forEach((option) => {
+  triadArpeggioOptionsForCollection().forEach((option) => {
     const template = arpeggioTemplateForOption(base, option);
     const isMinorContext = usesMinorKeySignature(template);
     const keyOptions = collectionKeyOptions(template, collectionSettings.keyOrder);
 
     keyOptions.forEach((keyOption) => {
       if (!isKeyAllowed(keyOption.value, isMinorContext, collectionSettings)) return;
+      addArpeggioEntryForKey(entries, collectionSettings, template, option, keyOption.value);
+    });
+  });
+}
+
+function addSeventhArpeggioEntries(entries, collectionSettings) {
+  const options = seventhArpeggioOptionsForCollection(collectionSettings);
+  if (options.length === 0) return;
+
+  if (collectionSettings.pairRelativeKeys) {
+    const base = collectionBaseSettings(collectionSettings);
+    getOrderedKeyPairs(collectionSettings.keyOrder).forEach(({ major, minor }) => {
+      const majorKeyOpt = KEY_OPTIONS.find((opt) => opt.value === major && opt.majorKey);
+      const minorKeyOpt = KEY_OPTIONS.find((opt) => opt.value === minor && opt.minorKey);
+
+      options.forEach((option) => {
+        const template = arpeggioTemplateForOption(base, option);
+        const useMinor = usesMinorKeySignature(template);
+        const keyValue = useMinor ? minor : major;
+        const keyOption = useMinor ? minorKeyOpt : majorKeyOpt;
+        if (
+          !keyOption
+          || !isKeyAllowedForSeventhQuality(
+            keyValue,
+            option.value.replace(/^seventh-/, ''),
+            collectionSettings,
+            true,
+          )
+        ) return;
+
+        addArpeggioEntryForKey(entries, collectionSettings, template, option, keyValue);
+      });
+    });
+    return;
+  }
+
+  if (collectionSettings.keyOrder === KEY_ORDERS.CHROMATIC) {
+    addChromaticPairedSeventhArpeggioEntries(entries, collectionSettings);
+    return;
+  }
+
+  const base = collectionBaseSettings(collectionSettings);
+  options.forEach((option) => {
+    const template = arpeggioTemplateForOption(base, option);
+    const isMinorContext = usesMinorKeySignature(template);
+    const keyOptions = collectionKeyOptions(template, collectionSettings.keyOrder);
+
+    keyOptions.forEach((keyOption) => {
+      if (
+        !isKeyAllowedForSeventhQuality(
+          keyOption.value,
+          option.value.replace(/^seventh-/, ''),
+          collectionSettings,
+          true,
+        )
+      ) return;
       addArpeggioEntryForKey(entries, collectionSettings, template, option, keyOption.value);
     });
   });
@@ -1484,10 +2096,14 @@ function addEntriesForTechnique(entries, collectionSettings, sectionId) {
     addScaleEntries(entries, collectionSettings);
   } else if (sectionId === 'triads' && collectionSettings.includeTriads) {
     addTriadEntries(entries, collectionSettings);
+  } else if (sectionId === 'fourNoteChords' && collectionSettings.includeFourNoteChords) {
+    addFourNoteChordEntries(entries, collectionSettings);
   } else if (sectionId === 'sevenths' && collectionSettings.includeSevenths) {
     addSeventhEntries(entries, collectionSettings);
   } else if (sectionId === 'arpeggios' && collectionSettings.includeArpeggios) {
     addArpeggioEntries(entries, collectionSettings);
+  } else if (sectionId === 'seventhArpeggios' && collectionSettings.includeSeventhArpeggios) {
+    addSeventhArpeggioEntries(entries, collectionSettings);
   }
 }
 
@@ -1507,22 +2123,52 @@ function addEntriesForTechniqueAndRelativePair(entries, collectionSettings, base
 
       addTriadEntry(entries, collectionSettings, base, qualityOption, keyValue);
     });
+  } else if (sectionId === 'fourNoteChords' && collectionSettings.includeFourNoteChords) {
+    FOUR_NOTE_CHORD_OPTIONS.forEach((qualityOption) => {
+      const useMinor = isTriadQualityMinorContext(qualityOption);
+      const keyValue = useMinor ? minor : major;
+      const keyOption = useMinor ? minorKeyOpt : majorKeyOpt;
+      if (!keyOption || !isKeyAllowed(keyValue, useMinor, collectionSettings)) return;
+
+      addFourNoteChordEntry(entries, collectionSettings, base, qualityOption, keyValue);
+    });
   } else if (sectionId === 'sevenths' && collectionSettings.includeSevenths) {
     SEVENTH_OPTIONS.forEach((qualityOption) => {
       const useMinor = isSeventhQualityMinorContext(qualityOption);
       const keyValue = useMinor ? minor : major;
       const keyOption = useMinor ? minorKeyOpt : majorKeyOpt;
-      if (!keyOption || !isKeyAllowed(keyValue, useMinor, collectionSettings)) return;
+      if (
+        !keyOption
+        || !isKeyAllowedForSeventhQuality(keyValue, qualityOption.value, collectionSettings)
+      ) return;
 
       addSeventhEntry(entries, collectionSettings, base, qualityOption, keyValue);
     });
   } else if (sectionId === 'arpeggios' && collectionSettings.includeArpeggios) {
-    ARPEGGIO_OPTIONS.forEach((option) => {
+    triadArpeggioOptionsForCollection().forEach((option) => {
       const template = arpeggioTemplateForOption(base, option);
       const useMinor = usesMinorKeySignature(template);
       const keyValue = useMinor ? minor : major;
       const keyOption = useMinor ? minorKeyOpt : majorKeyOpt;
       if (!keyOption || !isKeyAllowed(keyValue, useMinor, collectionSettings)) return;
+
+      addArpeggioEntryForKey(entries, collectionSettings, template, option, keyValue);
+    });
+  } else if (sectionId === 'seventhArpeggios' && collectionSettings.includeSeventhArpeggios) {
+    seventhArpeggioOptionsForCollection(collectionSettings).forEach((option) => {
+      const template = arpeggioTemplateForOption(base, option);
+      const useMinor = usesMinorKeySignature(template);
+      const keyValue = useMinor ? minor : major;
+      const keyOption = useMinor ? minorKeyOpt : majorKeyOpt;
+      if (
+        !keyOption
+        || !isKeyAllowedForSeventhQuality(
+          keyValue,
+          option.value.replace(/^seventh-/, ''),
+          collectionSettings,
+          true,
+        )
+      ) return;
 
       addArpeggioEntryForKey(entries, collectionSettings, template, option, keyValue);
     });
@@ -1534,10 +2180,14 @@ function addEntriesForTechniqueAndKeyOption(entries, collectionSettings, base, s
     addScaleEntriesForKeyOption(entries, collectionSettings, base, keyOption);
   } else if (sectionId === 'triads' && collectionSettings.includeTriads) {
     addChromaticPairedTriadEntriesForKeyOption(entries, collectionSettings, base, keyOption);
+  } else if (sectionId === 'fourNoteChords' && collectionSettings.includeFourNoteChords) {
+    addChromaticPairedFourNoteChordEntriesForKeyOption(entries, collectionSettings, base, keyOption);
   } else if (sectionId === 'sevenths' && collectionSettings.includeSevenths) {
     addSeventhEntriesForKeyOption(entries, collectionSettings, base, keyOption);
   } else if (sectionId === 'arpeggios' && collectionSettings.includeArpeggios) {
     addChromaticPairedArpeggioEntriesForKeyOption(entries, collectionSettings, base, keyOption);
+  } else if (sectionId === 'seventhArpeggios' && collectionSettings.includeSeventhArpeggios) {
+    addChromaticPairedSeventhArpeggioEntriesForKeyOption(entries, collectionSettings, base, keyOption);
   }
 }
 
@@ -1592,19 +2242,27 @@ function settingsGroupForEntry(entry) {
   return entry.settingsGroup ?? [entry.settings];
 }
 
+function settingsLinesForEntry(entry) {
+  return entry.settingsLines ?? [settingsGroupForEntry(entry)];
+}
+
 function techniqueCountForEntry(entry) {
-  return entry.techniqueCount ?? settingsGroupForEntry(entry).length;
+  return entry.techniqueCount
+    ?? settingsLinesForEntry(entry).reduce((count, settingsGroup) => count + settingsGroup.length, 0);
 }
 
 function scoreCallForEntry(entry, options = {}) {
-  const settingsGroup = settingsGroupForEntry(entry);
-  const first = settingsGroup[0];
-  return scoreCallForSettingsGroup(
-    settingsGroup,
-    entry.title,
-    options.showDetails ? subtitleForSettings(first) : '',
-    { compact: true, groupSeparator: entry.groupSeparator },
-  );
+  return settingsLinesForEntry(entry)
+    .map((settingsGroup, index) => {
+      const first = settingsGroup[0];
+      return scoreCallForSettingsGroup(
+        settingsGroup,
+        index === 0 ? entry.title : '',
+        index === 0 && options.showDetails ? subtitleForSettings(first) : '',
+        { compact: true, groupSeparator: entry.groupSeparator },
+      );
+    })
+    .join('\n\n#v(2mm)\n\n');
 }
 
 function sourceForEntries(entries, options = {}) {

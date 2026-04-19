@@ -6,6 +6,7 @@ import {
   DIRECTIONS,
   DISPLAY_SIZE_OPTIONS,
   DURATION_OPTIONS,
+  FOUR_NOTE_CHORD_OPTIONS,
   HANDS,
   KEY_OPTIONS,
   KEY_ORDERS,
@@ -63,6 +64,7 @@ const chordPresentationOptions = [
   { value: CHORD_PRESENTATION.BOTH, label: 'Solid and broken' },
   { value: CHORD_PRESENTATION.SOLID, label: 'Solid only' },
   { value: CHORD_PRESENTATION.BROKEN, label: 'Broken only' },
+  { value: CHORD_PRESENTATION.SOLID_WITH_REST, label: 'Solid with quarter rest' },
 ];
 
 const arpeggioPresentationOptions = [
@@ -101,6 +103,7 @@ function presetToSettings(preset, shared) {
         octaves: 1,
         includeScales: true,
         includeTriads: true,
+        includeFourNoteChords: false,
         includeSevenths: false,
         includeArpeggios: false,
         triadPresentation: CHORD_PRESENTATION.BOTH,
@@ -114,6 +117,7 @@ function presetToSettings(preset, shared) {
         title: 'Intermediate Technique Collection',
         includeScales: true,
         includeTriads: true,
+        includeFourNoteChords: false,
         includeSevenths: true,
         includeArpeggios: true,
         triadPresentation: CHORD_PRESENTATION.BOTH,
@@ -129,6 +133,7 @@ function presetToSettings(preset, shared) {
         title: 'Advanced Technique Collection',
         includeScales: true,
         includeTriads: true,
+        includeFourNoteChords: false,
         includeSevenths: true,
         includeArpeggios: true,
         triadPresentation: CHORD_PRESENTATION.BOTH,
@@ -263,9 +268,67 @@ const KeyChipSelector = React.memo(function KeyChipSelector({ allKeys, selectedK
 const CUSTOM_SECTIONS = [
   { id: 'scales', label: 'Scales', settingKey: 'includeScales' },
   { id: 'triads', label: 'Triads', settingKey: 'includeTriads' },
+  { id: 'fourNoteChords', label: '4 Note Chords', settingKey: 'includeFourNoteChords' },
   { id: 'sevenths', label: '7th Chords', settingKey: 'includeSevenths' },
   { id: 'arpeggios', label: 'Arpeggios', settingKey: 'includeArpeggios' },
+  { id: 'seventhArpeggios', label: '7th Chord Arpeggios', settingKey: 'includeSeventhArpeggios' },
 ];
+
+const SEVENTH_QUALITY_KEY_GROUPS = [
+  { value: 'major7', label: 'Major 7th', allKeys: ALL_MAJOR_KEYS },
+  { value: 'dominant7', label: 'Dominant 7th', allKeys: ALL_MAJOR_KEYS },
+  { value: 'minor7', label: 'Minor 7th', allKeys: ALL_MINOR_KEYS },
+  { value: 'halfDiminished7', label: 'Half Diminished 7th', allKeys: ALL_MINOR_KEYS },
+  { value: 'diminished7', label: 'Fully Diminished 7th', allKeys: ALL_MINOR_KEYS },
+];
+
+function createDefaultSeventhQualityKeySelections() {
+  return Object.fromEntries(
+    SEVENTH_QUALITY_KEY_GROUPS.map((group) => [group.value, new Set(group.allKeys)]),
+  );
+}
+
+function sectionCollectionSettings(
+  baseSettings,
+  sectionId,
+  majorKeys,
+  minorKeys,
+  seventhKeySelections,
+) {
+  const enabledSettingKey = CUSTOM_SECTIONS.find((section) => section.id === sectionId)?.settingKey;
+  return {
+    ...baseSettings,
+    includeScales: false,
+    includeTriads: false,
+    includeSevenths: false,
+    includeArpeggios: false,
+    includeSeventhArpeggios: false,
+    allowedMajorKeys: majorKeys,
+    allowedMinorKeys: minorKeys,
+    allowedSeventhKeysByQuality: sectionId === 'sevenths' ? seventhKeySelections : undefined,
+    allowedSeventhArpeggioKeysByQuality: sectionId === 'seventhArpeggios' ? seventhKeySelections : undefined,
+    techniqueOrder: [sectionId],
+    ...(enabledSettingKey ? { [enabledSettingKey]: true } : {}),
+  };
+}
+
+function buildCustomPreviewEntries(
+  baseSettings,
+  sectionOrder,
+  customMajorKeys,
+  customMinorKeys,
+  customSeventhKeysBySection,
+) {
+  return sectionOrder.flatMap((sectionId) => collectionEntriesForSettings(
+    sectionCollectionSettings(
+      baseSettings,
+      sectionId,
+      customMajorKeys[sectionId],
+      customMinorKeys[sectionId],
+      customSeventhKeysBySection[sectionId],
+    ),
+  ));
+}
 
 function TechniqueSection({
   section,
@@ -283,6 +346,10 @@ function TechniqueSection({
   onSelectNoneMajor,
   onSelectAllMinor,
   onSelectNoneMinor,
+  selectedSeventhKeysByQuality,
+  onSeventhQualityKeyToggle,
+  onSelectAllSeventhQualityKeys,
+  onSelectNoSeventhQualityKeys,
   dragHandlers,
 }) {
   return (
@@ -309,28 +376,57 @@ function TechniqueSection({
       </div>
       {expanded && (
         <div className="technique-section-body">
-          <p className="section-label">Major Keys</p>
-          <KeyChipSelector
-            allKeys={ALL_MAJOR_KEYS}
-            selectedKeys={selectedMajorKeys}
-            onToggle={onMajorKeyToggle}
-            onSelectAll={onSelectAllMajor}
-            onSelectNone={onSelectNoneMajor}
-          />
-          <p className="section-label">Minor Keys</p>
-          <KeyChipSelector
-            allKeys={ALL_MINOR_KEYS}
-            selectedKeys={selectedMinorKeys}
-            onToggle={onMinorKeyToggle}
-            onSelectAll={onSelectAllMinor}
-            onSelectNone={onSelectNoneMinor}
-          />
+          {!['sevenths', 'seventhArpeggios'].includes(section.id) && (
+            <>
+              <p className="section-label">Major Keys</p>
+              <KeyChipSelector
+                allKeys={ALL_MAJOR_KEYS}
+                selectedKeys={selectedMajorKeys}
+                onToggle={onMajorKeyToggle}
+                onSelectAll={onSelectAllMajor}
+                onSelectNone={onSelectNoneMajor}
+              />
+              <p className="section-label">Minor Keys</p>
+              <KeyChipSelector
+                allKeys={ALL_MINOR_KEYS}
+                selectedKeys={selectedMinorKeys}
+                onToggle={onMinorKeyToggle}
+                onSelectAll={onSelectAllMinor}
+                onSelectNone={onSelectNoneMinor}
+              />
+            </>
+          )}
+          {['sevenths', 'seventhArpeggios'].includes(section.id) && SEVENTH_QUALITY_KEY_GROUPS.map((group) => (
+            <div key={group.value}>
+              <p className="section-label">{group.label} Keys</p>
+              <KeyChipSelector
+                allKeys={group.allKeys}
+                selectedKeys={selectedSeventhKeysByQuality[group.value]}
+                onToggle={(key) => onSeventhQualityKeyToggle(group.value, key)}
+                onSelectAll={() => onSelectAllSeventhQualityKeys(group.value)}
+                onSelectNone={() => onSelectNoSeventhQualityKeys(group.value)}
+              />
+            </div>
+          ))}
           {section.id === 'triads' && (
             <div className="section-select-row">
               <label>Presentation</label>
               <select
                 value={settings.triadPresentation}
                 onChange={(e) => onSettingChange('triadPresentation', e.target.value)}
+              >
+                {chordPresentationOptions.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {section.id === 'fourNoteChords' && (
+            <div className="section-select-row">
+              <label>Presentation</label>
+              <select
+                value={settings.fourNoteChordPresentation}
+                onChange={(e) => onSettingChange('fourNoteChordPresentation', e.target.value)}
               >
                 {chordPresentationOptions.map((o) => (
                   <option key={o.value} value={o.value}>{o.label}</option>
@@ -352,6 +448,19 @@ function TechniqueSection({
             </div>
           )}
           {section.id === 'arpeggios' && (
+            <div className="section-select-row">
+              <label>Presentation</label>
+              <select
+                value={settings.arpeggioPresentation}
+                onChange={(e) => onSettingChange('arpeggioPresentation', e.target.value)}
+              >
+                {arpeggioPresentationOptions.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {section.id === 'seventhArpeggios' && (
             <div className="section-select-row">
               <label>Presentation</label>
               <select
@@ -424,8 +533,10 @@ export default function TechniqueCollectionBuilder() {
     ...DEFAULT_COLLECTION_SETTINGS,
     includeScales: true,
     includeTriads: true,
+    includeFourNoteChords: true,
     includeSevenths: true,
     includeArpeggios: true,
+    includeSeventhArpeggios: true,
   });
   const [customSectionOrder, setCustomSectionOrder] = useState(
     CUSTOM_SECTIONS.map((s) => s.id),
@@ -434,14 +545,22 @@ export default function TechniqueCollectionBuilder() {
   const [customMajorKeys, setCustomMajorKeys] = useState({
     scales: new Set(ALL_MAJOR_KEYS),
     triads: new Set(ALL_MAJOR_KEYS),
+    fourNoteChords: new Set(ALL_MAJOR_KEYS),
     sevenths: new Set(ALL_MAJOR_KEYS),
     arpeggios: new Set(ALL_MAJOR_KEYS),
+    seventhArpeggios: new Set(ALL_MAJOR_KEYS),
   });
   const [customMinorKeys, setCustomMinorKeys] = useState({
     scales: new Set(ALL_MINOR_KEYS),
     triads: new Set(ALL_MINOR_KEYS),
+    fourNoteChords: new Set(ALL_MINOR_KEYS),
     sevenths: new Set(ALL_MINOR_KEYS),
     arpeggios: new Set(ALL_MINOR_KEYS),
+    seventhArpeggios: new Set(ALL_MINOR_KEYS),
+  });
+  const [customSeventhKeysBySection, setCustomSeventhKeysBySection] = useState({
+    sevenths: createDefaultSeventhQualityKeySelections(),
+    seventhArpeggios: createDefaultSeventhQualityKeySelections(),
   });
 
   const [committedSettings, setCommittedSettings] = useState(null);
@@ -465,16 +584,36 @@ export default function TechniqueCollectionBuilder() {
         ...sharedSettings,
         title: customSettings.title || 'Custom Technique Collection',
         techniqueOrder: customSectionOrder,
+        allowedSeventhKeysByQuality: customSeventhKeysBySection.sevenths,
+        allowedSeventhArpeggioKeysByQuality: customSeventhKeysBySection.seventhArpeggios,
       };
     }
     return presetToSettings(activePreset, sharedSettings);
-  }, [activePreset, sharedSettings, customSettings, customSectionOrder]);
+  }, [activePreset, sharedSettings, customSettings, customSectionOrder, customSeventhKeysBySection]);
 
   // Preview entries for custom mode entry reordering
   const previewEntries = useMemo(() => {
     if (activePreset !== PRESETS.CUSTOM) return [];
-    return collectionEntriesForSettings(pendingSettings);
-  }, [activePreset, pendingSettings]);
+    const enabledSectionIds = customSectionOrder.filter((sectionId) => {
+      const section = CUSTOM_SECTIONS.find((candidate) => candidate.id === sectionId);
+      return section ? customSettings[section.settingKey] : false;
+    });
+    return buildCustomPreviewEntries(
+      pendingSettings,
+      enabledSectionIds,
+      customMajorKeys,
+      customMinorKeys,
+      customSeventhKeysBySection,
+    );
+  }, [
+    activePreset,
+    pendingSettings,
+    customSectionOrder,
+    customSettings,
+    customMajorKeys,
+    customMinorKeys,
+    customSeventhKeysBySection,
+  ]);
 
   // Reset entry order when the set of entries changes
   const entryFingerprint = useMemo(
@@ -516,9 +655,11 @@ export default function TechniqueCollectionBuilder() {
   }, []);
 
   const handleGenerate = useCallback(() => {
-    if (activePreset === PRESETS.CUSTOM && customEntryOrder) {
-      const reorderedEntries = customEntryOrder.map((i) => previewEntries[i]);
-      setCommittedSettings({ ...pendingSettings, customEntries: reorderedEntries });
+    if (activePreset === PRESETS.CUSTOM) {
+      const customEntries = customEntryOrder
+        ? customEntryOrder.map((i) => previewEntries[i])
+        : previewEntries;
+      setCommittedSettings({ ...pendingSettings, customEntries });
     } else {
       setCommittedSettings(pendingSettings);
     }
@@ -637,6 +778,41 @@ export default function TechniqueCollectionBuilder() {
 
   const selectNoneMinor = useCallback((sectionId) => {
     setCustomMinorKeys((c) => ({ ...c, [sectionId]: new Set() }));
+    setHasPendingChanges(true);
+  }, []);
+
+  const toggleSeventhQualityKey = useCallback((sectionId, quality, key) => {
+    setCustomSeventhKeysBySection((current) => {
+      const nextSection = { ...current[sectionId] };
+      const nextKeys = new Set(nextSection[quality]);
+      if (nextKeys.has(key)) nextKeys.delete(key); else nextKeys.add(key);
+      nextSection[quality] = nextKeys;
+      return { ...current, [sectionId]: nextSection };
+    });
+    setHasPendingChanges(true);
+  }, []);
+
+  const selectAllSeventhQualityKeys = useCallback((sectionId, quality) => {
+    const group = SEVENTH_QUALITY_KEY_GROUPS.find((candidate) => candidate.value === quality);
+    if (!group) return;
+    setCustomSeventhKeysBySection((current) => ({
+      ...current,
+      [sectionId]: {
+        ...current[sectionId],
+        [quality]: new Set(group.allKeys),
+      },
+    }));
+    setHasPendingChanges(true);
+  }, []);
+
+  const selectNoSeventhQualityKeys = useCallback((sectionId, quality) => {
+    setCustomSeventhKeysBySection((current) => ({
+      ...current,
+      [sectionId]: {
+        ...current[sectionId],
+        [quality]: new Set(),
+      },
+    }));
     setHasPendingChanges(true);
   }, []);
 
@@ -943,6 +1119,10 @@ export default function TechniqueCollectionBuilder() {
                     onSelectNoneMajor={() => selectNoneMajor(section.id)}
                     onSelectAllMinor={() => selectAllMinor(section.id)}
                     onSelectNoneMinor={() => selectNoneMinor(section.id)}
+                    selectedSeventhKeysByQuality={customSeventhKeysBySection[section.id] ?? createDefaultSeventhQualityKeySelections()}
+                    onSeventhQualityKeyToggle={(quality, key) => toggleSeventhQualityKey(section.id, quality, key)}
+                    onSelectAllSeventhQualityKeys={(quality) => selectAllSeventhQualityKeys(section.id, quality)}
+                    onSelectNoSeventhQualityKeys={(quality) => selectNoSeventhQualityKeys(section.id, quality)}
                     dragHandlers={{
                       onDragStart: (e) => handleDragStart(e, section.id),
                       onDragOver: handleDragOver,
