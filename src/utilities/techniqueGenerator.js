@@ -897,7 +897,7 @@ function contraryMotionScaleMusicForHand(settings, hand) {
   const baseRootOctave = scaleRootOctaveForKey(keyOption, handConfig.rootOctave);
   const segmentDirections = contraryMotionSegmentDirections(hand);
   const scaleNotes = [];
-  let octaveOffset = 0;
+  let currentTonicOctave = baseRootOctave;
 
   segmentDirections.forEach((direction, segmentIndex) => {
     const segmentSettings = {
@@ -906,6 +906,9 @@ function contraryMotionScaleMusicForHand(settings, hand) {
       octaves: 1,
       direction,
     };
+    const segmentRootOctave = direction === DIRECTIONS.UP
+      ? currentTonicOctave
+      : currentTonicOctave - 1;
     const segmentNotes = getScaleNotesForSettings(
       segmentSettings,
       keyOption,
@@ -916,7 +919,7 @@ function contraryMotionScaleMusicForHand(settings, hand) {
     const segmentDiatonicNotes = scaleDiatonicNotesForSettings(
       segmentSettings,
       keyOption,
-      baseRootOctave + octaveOffset,
+      segmentRootOctave,
     );
     const segmentScaleNotes = scaleNotesWithMetadata(
       segmentSettings,
@@ -931,7 +934,7 @@ function contraryMotionScaleMusicForHand(settings, hand) {
     scaleNotes.push(...(segmentIndex === 0
       ? segmentScaleNotes.map((note) => ({ ...note, segmentIndex }))
       : segmentScaleNotes.slice(1).map((note) => ({ ...note, segmentIndex }))));
-    octaveOffset += direction === DIRECTIONS.UP ? 1 : -1;
+    currentTonicOctave += direction === DIRECTIONS.UP ? 1 : -1;
   });
 
   if (scaleNotes.length > 0) {
