@@ -948,9 +948,20 @@ function contraryMotionScaleMusicForHand(settings, hand) {
       { holdLastNote: false },
     );
 
+    const adjustedSegmentScaleNotes =
+      hand === HANDS.LEFT
+      && direction === DIRECTIONS.DOWN
+      && segmentIndex < segmentDirections.length - 1
+        ? segmentScaleNotes.map((note, noteIndex) => (
+            noteIndex === segmentScaleNotes.length - 1 && note.fingering?.[0] === 5
+              ? { ...note, fingering: [1, ...note.fingering.slice(1)] }
+              : note
+          ))
+        : segmentScaleNotes;
+
     scaleNotes.push(...(segmentIndex === 0
-      ? segmentScaleNotes.map((note) => ({ ...note, segmentIndex }))
-      : segmentScaleNotes.slice(1).map((note) => ({ ...note, segmentIndex }))));
+      ? adjustedSegmentScaleNotes.map((note) => ({ ...note, segmentIndex }))
+      : adjustedSegmentScaleNotes.slice(1).map((note) => ({ ...note, segmentIndex }))));
     currentTonicOctave += direction === DIRECTIONS.UP ? 1 : -1;
   });
 
