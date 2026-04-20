@@ -2262,7 +2262,7 @@ function scoreCallForEntry(entry, options = {}) {
         { compact: true, groupSeparator: entry.groupSeparator },
       );
     })
-    .join('\n\n#v(2mm)\n\n');
+    .join('\n\n#v(0.5mm)\n\n');
 }
 
 function sourceForEntries(entries, options = {}) {
