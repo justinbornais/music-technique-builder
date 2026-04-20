@@ -20,6 +20,7 @@ import { renderTypstSvg, warmTypstRenderer } from '../utilities/typstRenderer.js
 const techniqueOptions = [
   { value: TECHNIQUE_TYPES.SCALE, label: 'Scales' },
   { value: TECHNIQUE_TYPES.CHROMATIC, label: 'Chromatic Scale' },
+  { value: TECHNIQUE_TYPES.CONTRARY_MOTION_SCALE, label: 'Contrary Motion Scale' },
   { value: TECHNIQUE_TYPES.TRIAD, label: 'Triads' },
   { value: TECHNIQUE_TYPES.FOUR_NOTE_CHORD, label: '4 Note Chords' },
   { value: TECHNIQUE_TYPES.SEVENTH, label: '7th Chords' },
@@ -29,6 +30,12 @@ const techniqueOptions = [
 const handOptions = [
   { value: HANDS.RIGHT, label: 'Right Hand' },
   { value: HANDS.LEFT, label: 'Left Hand' },
+  { value: HANDS.SEPARATE, label: 'Hands Separate' },
+  { value: HANDS.TOGETHER, label: 'Hands Together' },
+];
+
+const contraryMotionHandOptions = [
+  { value: HANDS.SEPARATE, label: 'Hands Separate' },
   { value: HANDS.TOGETHER, label: 'Hands Together' },
 ];
 
@@ -90,6 +97,9 @@ export default function TechniqueBuilder() {
     pendingSettings.technique,
     pendingSettings.scaleType,
   ]);
+  const availableHandOptions = pendingSettings.technique === TECHNIQUE_TYPES.CONTRARY_MOTION_SCALE
+    ? contraryMotionHandOptions
+    : handOptions;
   const document = useMemo(
     () => committedSettings ? buildTechniqueDocument(committedSettings) : null,
     [committedSettings],
@@ -116,6 +126,11 @@ export default function TechniqueBuilder() {
     if (keyOptions.some((option) => option.value === pendingSettings.key)) return;
     updateSetting('key', keyOptions[0]?.value ?? DEFAULT_SETTINGS.key);
   }, [keyOptions, pendingSettings.key]);
+
+  useEffect(() => {
+    if (availableHandOptions.some((option) => option.value === pendingSettings.hand)) return;
+    updateSetting('hand', availableHandOptions[0]?.value ?? DEFAULT_SETTINGS.hand);
+  }, [availableHandOptions, pendingSettings.hand]);
 
   useEffect(() => {
     if (!document) return;
@@ -171,7 +186,7 @@ export default function TechniqueBuilder() {
               options={keyOptions}
               onChange={(value) => updateSetting('key', value)}
             />
-            {pendingSettings.technique === TECHNIQUE_TYPES.SCALE && (
+            {(pendingSettings.technique === TECHNIQUE_TYPES.SCALE || pendingSettings.technique === TECHNIQUE_TYPES.CONTRARY_MOTION_SCALE) && (
               <SelectField
                 id="scaleType"
                 label="Scale"
@@ -220,16 +235,18 @@ export default function TechniqueBuilder() {
               id="hand"
               label="Hand"
               value={pendingSettings.hand}
-              options={handOptions}
+              options={availableHandOptions}
               onChange={(value) => updateSetting('hand', value)}
             />
-            <SelectField
-              id="direction"
-              label="Direction"
-              value={pendingSettings.direction}
-              options={directionOptions}
-              onChange={(value) => updateSetting('direction', value)}
-            />
+            {pendingSettings.technique !== TECHNIQUE_TYPES.CONTRARY_MOTION_SCALE && (
+              <SelectField
+                id="direction"
+                label="Direction"
+                value={pendingSettings.direction}
+                options={directionOptions}
+                onChange={(value) => updateSetting('direction', value)}
+              />
+            )}
             <SelectField
               id="duration"
               label="Duration"

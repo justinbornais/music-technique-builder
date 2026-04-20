@@ -67,6 +67,26 @@ function noteFromPitch(pitch) {
 const LEFT_HAND_TREBLE_MIN_PITCH = pitchFromNote(5, 4);
 const RIGHT_HAND_8VA_MIN_PITCH = pitchFromNote(10, 6);
 const SCALE_CLEF_CHANGE_GROUP_SIZE = 4;
+const CONTRARY_MOTION_RIGHT_SEGMENTS = [
+  DIRECTIONS.UP,
+  DIRECTIONS.UP,
+  DIRECTIONS.DOWN,
+  DIRECTIONS.UP,
+  DIRECTIONS.DOWN,
+  DIRECTIONS.UP,
+  DIRECTIONS.DOWN,
+  DIRECTIONS.DOWN,
+];
+const CONTRARY_MOTION_LEFT_SEGMENTS = [
+  DIRECTIONS.UP,
+  DIRECTIONS.DOWN,
+  DIRECTIONS.UP,
+  DIRECTIONS.UP,
+  DIRECTIONS.DOWN,
+  DIRECTIONS.DOWN,
+  DIRECTIONS.UP,
+  DIRECTIONS.DOWN,
+];
 
 // ─── Chromatic scale helpers ───
 
@@ -194,8 +214,35 @@ function isMinorScale(scaleType) {
   return scaleType !== scaleTypes.MAJOR;
 }
 
+function isStandardScaleTechnique(settings) {
+  return settings.technique === TECHNIQUE_TYPES.SCALE
+    || settings.technique === TECHNIQUE_TYPES.CONTRARY_MOTION_SCALE;
+}
+
+function isTwoStaffHandMode(hand) {
+  return hand === HANDS.SEPARATE || hand === HANDS.TOGETHER;
+}
+
+function handModeForSettings(settings) {
+  if (settings.technique === TECHNIQUE_TYPES.CONTRARY_MOTION_SCALE) {
+    return settings.hand === HANDS.TOGETHER ? HANDS.TOGETHER : HANDS.SEPARATE;
+  }
+
+  return settings.hand;
+}
+
+function handsForSettings(settings) {
+  const handMode = handModeForSettings(settings);
+  return isTwoStaffHandMode(handMode) ? [HANDS.RIGHT, HANDS.LEFT] : [handMode];
+}
+
+function staffGroupForSettings(settings, staves) {
+  if (staves.length < 2) return 'none';
+  return handModeForSettings(settings) === HANDS.TOGETHER ? 'grand' : 'none';
+}
+
 export function getKeyOptionsForSettings(settings) {
-  if (settings.technique !== TECHNIQUE_TYPES.SCALE) {
+  if (!isStandardScaleTechnique(settings)) {
     return KEY_OPTIONS;
   }
 
@@ -218,7 +265,7 @@ function shouldUseKeySignature(settings) {
 }
 
 function usesMinorKeySignature(settings) {
-  if (settings.technique === TECHNIQUE_TYPES.SCALE) {
+  if (isStandardScaleTechnique(settings)) {
     return isMinorScale(settings.scaleType);
   }
 
@@ -266,6 +313,10 @@ function clampScaleOctaves(octaves) {
 }
 
 function effectiveOctaves(settings) {
+  if (settings.technique === TECHNIQUE_TYPES.CONTRARY_MOTION_SCALE) {
+    return 2;
+  }
+
   if (settings.technique === TECHNIQUE_TYPES.SCALE || settings.technique === TECHNIQUE_TYPES.CHROMATIC) {
     return clampScaleOctaves(settings.octaves);
   }
@@ -358,6 +409,35 @@ function ascendingScaleDiatonicNotes(settings, keyOption, rootOctave) {
 function scaleDiatonicNotesForSettings(settings, keyOption, rootOctave) {
   const ascending = ascendingScaleDiatonicNotes(settings, keyOption, rootOctave);
   return withDirection(ascending, settings.direction);
+}
+
+function scaleNotesWithMetadata(settings, hand, notes, diatonicNotes, handConfig, useKeySignature) {
+  const signatureAccidentals = useKeySignature
+    ? keySignatureAccidentals(keyForSettings(settings))
+    : {};
+
+  return notes.map((note, index) => {
+    const parsed = scaleNoteToPitch(note.note);
+    const diatonic = diatonicNotes[index];
+    const letter = diatonic?.letter ?? null;
+    const forceNatural = isDescendingMelodicMinorNaturalIndex(settings, index);
+    return {
+      ...parsed,
+      octave: diatonic?.octave ?? parsed.octave,
+      letter,
+      accidental: letter
+        ? forceNatural
+          ? '='
+          : useKeySignature
+            ? accidentalForKeySignature(parsed.index, letter, signatureAccidentals)
+            : accidentalForWrittenPitch(parsed.index, letter)
+        : '',
+      fingering: note.fingering,
+      duration: index === notes.length - 1
+        ? finalScaleDuration(settings.duration)
+        : formatDuration(settings.duration),
+    };
+  });
 }
 
 function parseLegacyScaleNote(note) {
@@ -738,32 +818,87 @@ function scaleMusicForHand(settings, hand) {
   };
   const scaleRootOctave = scaleRootOctaveForKey(keyOption, handConfig.rootOctave);
   const diatonicNotes = scaleDiatonicNotesForSettings(settings, keyOption, scaleRootOctave);
-  const signatureAccidentals = useKeySignature
-    ? keySignatureAccidentals(keyForSettings(settings))
-    : {};
+  const scaleNotes = scaleNotesWithMetadata(
+    settings,
+    hand,
+    notes,
+    diatonicNotes,
+    handConfig,
+    useKeySignature,
+  );
+  const tokens = tokensWithLeftHandClefs(
+    scaleNotes,
+    context,
+    (note, activeContext) => noteToken(note, activeContext),
+    pitchForNote,
+    { roundToGroupSize: SCALE_CLEF_CHANGE_GROUP_SIZE },
+  );
 
-  const scaleNotes = notes.map((note, index) => {
-    const parsed = scaleNoteToPitch(note.note);
-    const diatonic = diatonicNotes[index];
-    const letter = diatonic?.letter ?? null;
-    const forceNatural = isDescendingMelodicMinorNaturalIndex(settings, index);
-    return {
-      ...parsed,
-      octave: diatonic?.octave ?? parsed.octave,
-      letter,
-      accidental: letter
-        ? forceNatural
-          ? '='
-          : useKeySignature
-            ? accidentalForKeySignature(parsed.index, letter, signatureAccidentals)
-            : accidentalForWrittenPitch(parsed.index, letter)
-        : '',
-      fingering: note.fingering,
-      duration: index === notes.length - 1
-        ? finalScaleDuration(settings.duration)
-        : formatDuration(settings.duration),
+  return musicLine(tokens);
+}
+
+function contraryMotionSegmentDirections(hand) {
+  return hand === HANDS.RIGHT
+    ? CONTRARY_MOTION_RIGHT_SEGMENTS
+    : CONTRARY_MOTION_LEFT_SEGMENTS;
+}
+
+function contraryMotionScaleMusicForHand(settings, hand) {
+  const handConfig = HAND_CONFIG[hand];
+  const keyOption = selectedKeyOption(settings);
+  const spelling = selectedSpelling(settings);
+  const useKeySignature = shouldUseKeySignature(settings);
+  const baseRootOctave = scaleRootOctaveForKey(keyOption, handConfig.rootOctave);
+  const segmentDirections = contraryMotionSegmentDirections(hand);
+  const scaleNotes = [];
+  let octaveOffset = 0;
+
+  segmentDirections.forEach((direction, segmentIndex) => {
+    const segmentSettings = {
+      ...settings,
+      technique: TECHNIQUE_TYPES.SCALE,
+      octaves: 1,
+      direction,
     };
+    const segmentNotes = getScaleNotesForSettings(
+      segmentSettings,
+      keyOption,
+      hand,
+      spelling,
+      useKeySignature,
+    );
+    const segmentDiatonicNotes = scaleDiatonicNotesForSettings(
+      segmentSettings,
+      keyOption,
+      baseRootOctave + octaveOffset,
+    );
+    const segmentScaleNotes = scaleNotesWithMetadata(
+      segmentSettings,
+      hand,
+      segmentNotes,
+      segmentDiatonicNotes,
+      handConfig,
+      useKeySignature,
+    );
+
+    scaleNotes.push(...(segmentIndex === 0 ? segmentScaleNotes : segmentScaleNotes.slice(1)));
+    octaveOffset += direction === DIRECTIONS.UP ? 1 : -1;
   });
+
+  if (scaleNotes.length > 0) {
+    scaleNotes[scaleNotes.length - 1] = {
+      ...scaleNotes[scaleNotes.length - 1],
+      duration: finalScaleDuration(settings.duration),
+    };
+  }
+
+  const context = {
+    ...handConfig,
+    spelling,
+    duration: Number(settings.duration),
+    showFingerings: settings.showFingerings,
+    useKeySignature,
+  };
   const tokens = tokensWithLeftHandClefs(
     scaleNotes,
     context,
@@ -1219,6 +1354,10 @@ function musicForHand(settings, hand) {
     return scaleMusicForHand(settings, hand);
   }
 
+  if (settings.technique === TECHNIQUE_TYPES.CONTRARY_MOTION_SCALE) {
+    return contraryMotionScaleMusicForHand(settings, hand);
+  }
+
   if (settings.technique === TECHNIQUE_TYPES.CHROMATIC) {
     return chromaticScaleMusicForHand(settings, hand);
   }
@@ -1241,6 +1380,10 @@ function musicForHand(settings, hand) {
 function qualityLabel(settings) {
   if (settings.technique === TECHNIQUE_TYPES.SCALE) {
     return getOption(SCALE_OPTIONS, settings.scaleType).label;
+  }
+
+  if (settings.technique === TECHNIQUE_TYPES.CONTRARY_MOTION_SCALE) {
+    return `${getOption(SCALE_OPTIONS, settings.scaleType).label} Contrary Motion Scale`;
   }
 
   if (settings.technique === TECHNIQUE_TYPES.CHROMATIC) {
@@ -1281,8 +1424,10 @@ function keyForSettings(settings) {
 }
 
 function handLabelForSettings(settings) {
-  if (settings.hand === HANDS.TOGETHER) return 'Hands together';
-  if (settings.hand === HANDS.RIGHT) return 'Right hand';
+  const handMode = handModeForSettings(settings);
+  if (handMode === HANDS.TOGETHER) return 'Hands together';
+  if (handMode === HANDS.SEPARATE) return 'Hands separate';
+  if (handMode === HANDS.RIGHT) return 'Right hand';
   return 'Left hand';
 }
 
@@ -1298,7 +1443,7 @@ function staffSizeForSettings(settings) {
 }
 
 function stavesForSettings(settings) {
-  const hands = settings.hand === HANDS.TOGETHER ? [HANDS.RIGHT, HANDS.LEFT] : [settings.hand];
+  const hands = handsForSettings(settings);
 
   return hands.map((hand) => {
     const config = HAND_CONFIG[hand];
@@ -1312,7 +1457,7 @@ function stavesForSettings(settings) {
 
 function stavesForSettingsGroup(settingsGroup, options = {}) {
   const first = settingsGroup[0];
-  const hands = first.hand === HANDS.TOGETHER ? [HANDS.RIGHT, HANDS.LEFT] : [first.hand];
+  const hands = handsForSettings(first);
   const needsLeftHandClefReset = settingsGroup.some(
     (settings) => settings.technique !== TECHNIQUE_TYPES.ARPEGGIO
       || arpeggioOptionForSettings(settings).chordSize === 4,
@@ -1347,7 +1492,7 @@ function scoreCallForSettingsGroup(
   title: ${typstString(title)},
   subtitle: ${subtitle ? typstString(subtitle) : 'none'},
   key: ${typstString(key)},
-  staff-group: ${typstString(staves.length > 1 ? 'grand' : 'none')},
+  staff-group: ${typstString(staffGroupForSettings(first, staves))},
   staff-size: ${staffSizeForSettings(first)}mm,
   staff-spacing: 9mm,
   system-spacing: ${systemSpacing},
@@ -1532,6 +1677,72 @@ function addScaleEntriesForKeyOption(entries, collectionSettings, base, keyOptio
   if (keyOption.minorKey && isKeyAllowed(keyOption.value, true, collectionSettings)) {
     addMinorScaleEntries(entries, base, keyOption.value, minorScaleOptions);
   }
+}
+
+function contraryMotionScaleSettings(base, keyValue, scaleType) {
+  return {
+    ...base,
+    technique: TECHNIQUE_TYPES.CONTRARY_MOTION_SCALE,
+    key: keyValue,
+    scaleType,
+  };
+}
+
+function addMajorContraryMotionScaleEntry(entries, base, keyValue) {
+  const settings = contraryMotionScaleSettings(base, keyValue, scaleTypes.MAJOR);
+  entries.push({ settings, title: techniqueLabel(settings) });
+}
+
+function addMinorContraryMotionScaleEntries(entries, base, keyValue, minorScaleOptions) {
+  minorScaleOptions.forEach((scaleOption) => {
+    const settings = contraryMotionScaleSettings(base, keyValue, scaleOption.value);
+    entries.push({ settings, title: techniqueLabel(settings) });
+  });
+}
+
+function addContraryMotionScaleEntries(entries, collectionSettings) {
+  const base = {
+    ...collectionBaseSettings(collectionSettings),
+    hand: isTwoStaffHandMode(collectionSettings.hand) ? collectionSettings.hand : HANDS.SEPARATE,
+  };
+  const minorScaleOptions = minorScaleOptionsForCollection(collectionSettings);
+
+  if (collectionSettings.pairRelativeKeys) {
+    getOrderedKeyPairs(collectionSettings.keyOrder).forEach(({ major, minor }) => {
+      const majorKeyOpt = KEY_OPTIONS.find((opt) => opt.value === major && opt.majorKey);
+      const minorKeyOpt = KEY_OPTIONS.find((opt) => opt.value === minor && opt.minorKey);
+
+      if (majorKeyOpt && isKeyAllowed(major, false, collectionSettings)) {
+        addMajorContraryMotionScaleEntry(entries, base, major);
+      }
+      if (minorKeyOpt && isKeyAllowed(minor, true, collectionSettings)) {
+        addMinorContraryMotionScaleEntries(entries, base, minor, minorScaleOptions);
+      }
+    });
+    return;
+  }
+
+  const majorKeyOptions = orderKeyOptions(
+    KEY_OPTIONS.filter((option) => option.majorKey),
+    collectionSettings.keyOrder,
+    false,
+  );
+  const minorKeyOptions = orderKeyOptions(
+    KEY_OPTIONS.filter((option) => option.minorKey),
+    collectionSettings.keyOrder,
+    true,
+  );
+
+  majorKeyOptions.forEach((keyOption) => {
+    if (isKeyAllowed(keyOption.value, false, collectionSettings)) {
+      addMajorContraryMotionScaleEntry(entries, base, keyOption.value);
+    }
+  });
+  minorKeyOptions.forEach((keyOption) => {
+    if (isKeyAllowed(keyOption.value, true, collectionSettings)) {
+      addMinorContraryMotionScaleEntries(entries, base, keyOption.value, minorScaleOptions);
+    }
+  });
 }
 
 function triadSolidSettings(base, qualityOption, keyValue, solidChordRest = false) {
@@ -2094,6 +2305,8 @@ function techniqueOrderForSettings(collectionSettings) {
 function addEntriesForTechnique(entries, collectionSettings, sectionId) {
   if (sectionId === 'scales' && collectionSettings.includeScales) {
     addScaleEntries(entries, collectionSettings);
+  } else if (sectionId === 'contraryMotionScales' && collectionSettings.includeContraryMotionScales) {
+    addContraryMotionScaleEntries(entries, collectionSettings);
   } else if (sectionId === 'triads' && collectionSettings.includeTriads) {
     addTriadEntries(entries, collectionSettings);
   } else if (sectionId === 'fourNoteChords' && collectionSettings.includeFourNoteChords) {
@@ -2114,6 +2327,14 @@ function addEntriesForTechniqueAndRelativePair(entries, collectionSettings, base
 
   if (sectionId === 'scales' && collectionSettings.includeScales) {
     addScaleEntriesForRelativePair(entries, collectionSettings, base, pair);
+  } else if (sectionId === 'contraryMotionScales' && collectionSettings.includeContraryMotionScales) {
+    const minorScaleOptions = minorScaleOptionsForCollection(collectionSettings);
+    if (majorKeyOpt && isKeyAllowed(major, false, collectionSettings)) {
+      addMajorContraryMotionScaleEntry(entries, { ...base, hand: isTwoStaffHandMode(base.hand) ? base.hand : HANDS.SEPARATE }, major);
+    }
+    if (minorKeyOpt && isKeyAllowed(minor, true, collectionSettings)) {
+      addMinorContraryMotionScaleEntries(entries, { ...base, hand: isTwoStaffHandMode(base.hand) ? base.hand : HANDS.SEPARATE }, minor, minorScaleOptions);
+    }
   } else if (sectionId === 'triads' && collectionSettings.includeTriads) {
     TRIAD_OPTIONS.forEach((qualityOption) => {
       const useMinor = isTriadQualityMinorContext(qualityOption);
@@ -2178,6 +2399,15 @@ function addEntriesForTechniqueAndRelativePair(entries, collectionSettings, base
 function addEntriesForTechniqueAndKeyOption(entries, collectionSettings, base, sectionId, keyOption) {
   if (sectionId === 'scales' && collectionSettings.includeScales) {
     addScaleEntriesForKeyOption(entries, collectionSettings, base, keyOption);
+  } else if (sectionId === 'contraryMotionScales' && collectionSettings.includeContraryMotionScales) {
+    const contraryBase = { ...base, hand: isTwoStaffHandMode(base.hand) ? base.hand : HANDS.SEPARATE };
+    const minorScaleOptions = minorScaleOptionsForCollection(collectionSettings);
+    if (keyOption.majorKey && isKeyAllowed(keyOption.value, false, collectionSettings)) {
+      addMajorContraryMotionScaleEntry(entries, contraryBase, keyOption.value);
+    }
+    if (keyOption.minorKey && isKeyAllowed(keyOption.value, true, collectionSettings)) {
+      addMinorContraryMotionScaleEntries(entries, contraryBase, keyOption.value, minorScaleOptions);
+    }
   } else if (sectionId === 'triads' && collectionSettings.includeTriads) {
     addChromaticPairedTriadEntriesForKeyOption(entries, collectionSettings, base, keyOption);
   } else if (sectionId === 'fourNoteChords' && collectionSettings.includeFourNoteChords) {

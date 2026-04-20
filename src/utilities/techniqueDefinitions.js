@@ -35,6 +35,7 @@ export const KEY_OPTIONS = [
 
 export const TECHNIQUE_TYPES = {
   SCALE: 'scale',
+  CONTRARY_MOTION_SCALE: 'contrary-motion-scale',
   CHROMATIC: 'chromatic',
   TRIAD: 'triad',
   FOUR_NOTE_CHORD: 'four-note-chord',
@@ -45,6 +46,7 @@ export const TECHNIQUE_TYPES = {
 export const HANDS = {
   RIGHT: 'right',
   LEFT: 'left',
+  SEPARATE: 'separate',
   TOGETHER: 'together',
 };
 
@@ -132,7 +134,7 @@ export const DURATION_OPTIONS = [
 const DEFAULT_STAFF_SIZE_MM = 1.7;
 export const TECHNIQUES_PER_RENDER_DOCUMENT = 1;
 export const DOUBLE_BARLINE_SEPARATOR = ' || ';
-export const DEFAULT_TECHNIQUE_ORDER = ['scales', 'triads', 'fourNoteChords', 'sevenths', 'arpeggios', 'seventhArpeggios'];
+export const DEFAULT_TECHNIQUE_ORDER = ['scales', 'contraryMotionScales', 'triads', 'fourNoteChords', 'sevenths', 'arpeggios', 'seventhArpeggios'];
 
 export const DISPLAY_SIZE_OPTIONS = [
   { value: 1, label: 'Default', staffSizeMm: DEFAULT_STAFF_SIZE_MM },
@@ -171,6 +173,7 @@ export const DEFAULT_COLLECTION_SETTINGS = {
   pairRelativeKeys: false,
   groupByKey: false,
   includeScales: true,
+  includeContraryMotionScales: false,
   includeTriads: false,
   includeFourNoteChords: false,
   includeSevenths: false,

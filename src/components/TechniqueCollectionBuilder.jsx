@@ -40,6 +40,7 @@ const presetTabs = [
 const handOptions = [
   { value: HANDS.RIGHT, label: 'Right Hand' },
   { value: HANDS.LEFT, label: 'Left Hand' },
+  { value: HANDS.SEPARATE, label: 'Hands Separate' },
   { value: HANDS.TOGETHER, label: 'Hands Together' },
 ];
 
@@ -102,6 +103,7 @@ function presetToSettings(preset, shared) {
         duration: 8,
         octaves: 1,
         includeScales: true,
+        includeContraryMotionScales: false,
         includeTriads: true,
         includeFourNoteChords: false,
         includeSevenths: false,
@@ -116,6 +118,7 @@ function presetToSettings(preset, shared) {
         ...base,
         title: 'Intermediate Technique Collection',
         includeScales: true,
+        includeContraryMotionScales: false,
         includeTriads: true,
         includeFourNoteChords: false,
         includeSevenths: true,
@@ -132,6 +135,7 @@ function presetToSettings(preset, shared) {
         ...base,
         title: 'Advanced Technique Collection',
         includeScales: true,
+        includeContraryMotionScales: false,
         includeTriads: true,
         includeFourNoteChords: false,
         includeSevenths: true,
@@ -267,6 +271,7 @@ const KeyChipSelector = React.memo(function KeyChipSelector({ allKeys, selectedK
 
 const CUSTOM_SECTIONS = [
   { id: 'scales', label: 'Scales', settingKey: 'includeScales' },
+  { id: 'contraryMotionScales', label: 'Contrary Motion Scales', settingKey: 'includeContraryMotionScales' },
   { id: 'triads', label: 'Triads', settingKey: 'includeTriads' },
   { id: 'fourNoteChords', label: '4 Note Chords', settingKey: 'includeFourNoteChords' },
   { id: 'sevenths', label: '7th Chords', settingKey: 'includeSevenths' },
@@ -299,6 +304,7 @@ function sectionCollectionSettings(
   return {
     ...baseSettings,
     includeScales: false,
+    includeContraryMotionScales: false,
     includeTriads: false,
     includeSevenths: false,
     includeArpeggios: false,
@@ -532,6 +538,7 @@ export default function TechniqueCollectionBuilder() {
   const [customSettings, setCustomSettings] = useState({
     ...DEFAULT_COLLECTION_SETTINGS,
     includeScales: true,
+    includeContraryMotionScales: true,
     includeTriads: true,
     includeFourNoteChords: true,
     includeSevenths: true,
@@ -544,6 +551,7 @@ export default function TechniqueCollectionBuilder() {
   const [expandedSections, setExpandedSections] = useState(new Set());
   const [customMajorKeys, setCustomMajorKeys] = useState({
     scales: new Set(ALL_MAJOR_KEYS),
+    contraryMotionScales: new Set(ALL_MAJOR_KEYS),
     triads: new Set(ALL_MAJOR_KEYS),
     fourNoteChords: new Set(ALL_MAJOR_KEYS),
     sevenths: new Set(ALL_MAJOR_KEYS),
@@ -552,6 +560,7 @@ export default function TechniqueCollectionBuilder() {
   });
   const [customMinorKeys, setCustomMinorKeys] = useState({
     scales: new Set(ALL_MINOR_KEYS),
+    contraryMotionScales: new Set(ALL_MINOR_KEYS),
     triads: new Set(ALL_MINOR_KEYS),
     fourNoteChords: new Set(ALL_MINOR_KEYS),
     sevenths: new Set(ALL_MINOR_KEYS),
