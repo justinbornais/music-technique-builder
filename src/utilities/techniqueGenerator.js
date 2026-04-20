@@ -846,30 +846,22 @@ function contraryMotionSegmentDirections(hand) {
 }
 
 function contraryMotionLeftHandTokens(scaleNotes, context) {
-  const topAscendingStart = scaleNotes.findIndex(
-    (note) => note.segmentIndex === CONTRARY_MOTION_TOP_ASCENDING_SEGMENT_INDEX,
-  );
-  if (topAscendingStart === -1) {
+  const trebleIndexes = scaleNotes
+    .map((note, index) => (clefForLeftHandPitch(pitchForNote(note)) === 'treble' ? index : -1))
+    .filter((index) => index >= 0);
+
+  if (trebleIndexes.length === 0) {
     return scaleNotes.map((note) => noteToken(note, context));
   }
 
-  const topAscendingNotes = scaleNotes.filter(
-    (note) => note.segmentIndex === CONTRARY_MOTION_TOP_ASCENDING_SEGMENT_INDEX,
+  const firstTrebleIndex = trebleIndexes[0];
+  const lastTrebleIndex = trebleIndexes[trebleIndexes.length - 1];
+  const switchToTrebleIndex = Math.floor(firstTrebleIndex / SCALE_CLEF_CHANGE_GROUP_SIZE)
+    * SCALE_CLEF_CHANGE_GROUP_SIZE;
+  const switchBackToBassIndex = Math.min(
+    scaleNotes.length,
+    Math.ceil((lastTrebleIndex + 1) / SCALE_CLEF_CHANGE_GROUP_SIZE) * SCALE_CLEF_CHANGE_GROUP_SIZE,
   );
-  const topAscendingBoundaries = roundedClefBoundaries(
-    topAscendingNotes,
-    pitchForNote,
-    SCALE_CLEF_CHANGE_GROUP_SIZE,
-  );
-  const trebleBoundary = [...topAscendingBoundaries.entries()]
-    .find(([, clef]) => clef === 'treble')?.[0];
-
-  if (trebleBoundary == null) {
-    return scaleNotes.map((note) => noteToken(note, context));
-  }
-
-  const switchToTrebleIndex = topAscendingStart + trebleBoundary;
-  const switchBackToBassIndex = topAscendingStart + topAscendingNotes.length;
   const tokens = [];
   let activeClef = 'bass';
 
