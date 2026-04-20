@@ -88,6 +88,10 @@ const CONTRARY_MOTION_LEFT_SEGMENTS = [
   DIRECTIONS.UP,
   DIRECTIONS.DOWN,
 ];
+const CONTRARY_MOTION_CLEF_WINDOW = {
+  startIndex: 20,
+  endIndex: 37,
+};
 
 // ─── Chromatic scale helpers ───
 
@@ -845,32 +849,50 @@ function contraryMotionSegmentDirections(hand) {
     : CONTRARY_MOTION_LEFT_SEGMENTS;
 }
 
-function contraryMotionLeftHandTokens(scaleNotes, context) {
+function contraryMotionLeftHandOctaveOffsetForKey(keyOption) {
+  const tonicLetter = keyOption.value.charAt(0).toUpperCase();
+  return ['E', 'F'].includes(tonicLetter) ? -1 : 0;
+}
+
+function contraryMotionLeftHandClefWindowForKey(keyOption, scaleNotes) {
+  const keyValue = keyOption.value;
+  if (keyValue === 'D' || keyValue === 'Db') {
+    return CONTRARY_MOTION_CLEF_WINDOW;
+  }
+
   const trebleIndexes = scaleNotes
     .map((note, index) => (clefForLeftHandPitch(pitchForNote(note)) === 'treble' ? index : -1))
     .filter((index) => index >= 0);
 
   if (trebleIndexes.length === 0) {
+    return null;
+  }
+
+  return {
+    startIndex: Math.floor(trebleIndexes[0] / SCALE_CLEF_CHANGE_GROUP_SIZE) * SCALE_CLEF_CHANGE_GROUP_SIZE,
+    endIndex: Math.min(
+      scaleNotes.length,
+      Math.ceil((trebleIndexes[trebleIndexes.length - 1] + 1) / SCALE_CLEF_CHANGE_GROUP_SIZE)
+        * SCALE_CLEF_CHANGE_GROUP_SIZE,
+    ),
+  };
+}
+
+function contraryMotionLeftHandTokens(scaleNotes, context, keyOption) {
+  const clefWindow = contraryMotionLeftHandClefWindowForKey(keyOption, scaleNotes);
+  if (!clefWindow) {
     return scaleNotes.map((note) => noteToken(note, context));
   }
 
-  const firstTrebleIndex = trebleIndexes[0];
-  const lastTrebleIndex = trebleIndexes[trebleIndexes.length - 1];
-  const switchToTrebleIndex = Math.floor(firstTrebleIndex / SCALE_CLEF_CHANGE_GROUP_SIZE)
-    * SCALE_CLEF_CHANGE_GROUP_SIZE;
-  const switchBackToBassIndex = Math.min(
-    scaleNotes.length,
-    Math.ceil((lastTrebleIndex + 1) / SCALE_CLEF_CHANGE_GROUP_SIZE) * SCALE_CLEF_CHANGE_GROUP_SIZE,
-  );
   const tokens = [];
   let activeClef = 'bass';
 
   scaleNotes.forEach((note, index) => {
-    if (index === switchToTrebleIndex && activeClef !== 'treble') {
+    if (index === clefWindow.startIndex && activeClef !== 'treble') {
       tokens.push('treble');
       activeClef = 'treble';
     }
-    if (index === switchBackToBassIndex && activeClef !== 'bass') {
+    if (index === clefWindow.endIndex && activeClef !== 'bass') {
       tokens.push('bass');
       activeClef = 'bass';
     }
@@ -889,7 +911,10 @@ function contraryMotionScaleMusicForHand(settings, hand) {
   const baseRootOctave = scaleRootOctaveForKey(keyOption, handConfig.rootOctave);
   const segmentDirections = contraryMotionSegmentDirections(hand);
   const scaleNotes = [];
-  let currentTonicOctave = baseRootOctave;
+  const leftHandOctaveOffset = hand === HANDS.LEFT
+    ? contraryMotionLeftHandOctaveOffsetForKey(keyOption)
+    : 0;
+  let currentTonicOctave = baseRootOctave + leftHandOctaveOffset;
 
   segmentDirections.forEach((direction, segmentIndex) => {
     const segmentSettings = {
@@ -944,7 +969,7 @@ function contraryMotionScaleMusicForHand(settings, hand) {
     useKeySignature,
   };
   const tokens = hand === HANDS.LEFT
-    ? contraryMotionLeftHandTokens(scaleNotes, context)
+    ? contraryMotionLeftHandTokens(scaleNotes, context, keyOption)
     : scaleNotes.map((note) => noteToken(note, context));
 
   return musicLine(tokens);
