@@ -948,16 +948,26 @@ function contraryMotionScaleMusicForHand(settings, hand) {
       { holdLastNote: false },
     );
 
-    const adjustedSegmentScaleNotes =
+    let adjustedSegmentScaleNotes = segmentScaleNotes;
+
+    if (hand === HANDS.RIGHT && direction === DIRECTIONS.UP && segmentIndex === 0) {
+      adjustedSegmentScaleNotes = segmentScaleNotes.map((note, noteIndex) => (
+        noteIndex === segmentScaleNotes.length - 1 && note.fingering?.[0] === 5
+          ? { ...note, fingering: [1, ...note.fingering.slice(1)] }
+          : note
+      ));
+    } else if (
       hand === HANDS.LEFT
       && direction === DIRECTIONS.DOWN
       && segmentIndex < segmentDirections.length - 1
-        ? segmentScaleNotes.map((note, noteIndex) => (
-            noteIndex === segmentScaleNotes.length - 1 && note.fingering?.[0] === 5
-              ? { ...note, fingering: [1, ...note.fingering.slice(1)] }
-              : note
-          ))
-        : segmentScaleNotes;
+      && segmentDirections[segmentIndex + 1] === DIRECTIONS.DOWN
+    ) {
+      adjustedSegmentScaleNotes = segmentScaleNotes.map((note, noteIndex) => (
+        noteIndex === segmentScaleNotes.length - 1 && note.fingering?.[0] === 5
+          ? { ...note, fingering: [1, ...note.fingering.slice(1)] }
+          : note
+      ));
+    }
 
     scaleNotes.push(...(segmentIndex === 0
       ? adjustedSegmentScaleNotes.map((note) => ({ ...note, segmentIndex }))
