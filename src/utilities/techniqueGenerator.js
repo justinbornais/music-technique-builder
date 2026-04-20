@@ -601,8 +601,14 @@ function arpeggioInversionName(settings, chordSize) {
   return inversionName(inversion, chordSize);
 }
 
-function chordFingering(group, quality, hand, position, chordSize) {
+function chordFingering(group, quality, hand, position, chordSize, key) {
   const definition = FINGERING_DEFINITIONS[group]?.[quality]?.[handKey(hand)];
+  const keyedDefinition = key
+    ? FINGERING_DEFINITIONS[group]?.[quality]?.keys?.[key]?.[handKey(hand)]
+    : null;
+  const keyed = keyedDefinition?.[inversionName(position, chordSize)];
+  if (keyed) return keyed;
+
   const named = definition?.[inversionName(position, chordSize)];
   if (named) return named;
 
@@ -1120,6 +1126,7 @@ function buildFourNoteChordNotes(rootPitch, rootLetter, rootOctave, intervals, p
 function fourNoteChordGroupsForHand(settings, hand, option) {
   const handConfig = HAND_CONFIG[hand];
   const keyOption = selectedKeyOption(settings);
+  const key = keyOption.value;
   const rootLetter = keyOption.value.charAt(0).toUpperCase();
   const rootOctave = triadRootOctaveForKey(keyOption, handConfig.rootOctave);
   const rootPitch = pitchFromNote(keyOption.index, rootOctave);
@@ -1135,7 +1142,7 @@ function fourNoteChordGroupsForHand(settings, hand, option) {
       position,
       settings,
     );
-    const fingering = chordFingering('fourNoteChords', quality, hand, position, 4);
+    const fingering = chordFingering('fourNoteChords', quality, hand, position, 4, key);
 
     return {
       notes: notes.map((note, index) => ({
@@ -1180,6 +1187,7 @@ function fourNoteChordMusicForHand(settings, hand) {
 
   const spelling = selectedSpelling(settings);
   const keyOption = selectedKeyOption(settings);
+  const key = keyOption.value;
   const rootOctave = triadRootOctaveForKey(keyOption, handConfig.rootOctave);
   const rootPitch = pitchFromNote(keyOption.index, rootOctave);
   const rootLetter = keyOption.value.charAt(0).toUpperCase();
@@ -1208,7 +1216,7 @@ function fourNoteChordMusicForHand(settings, hand) {
   if (hand === HANDS.LEFT) {
     tokens = directed.map((chord) => chordToken(
       chord.notes,
-      chordFingering('fourNoteChords', settings.fourNoteChordQuality, hand, chord.position, 4),
+      chordFingering('fourNoteChords', settings.fourNoteChordQuality, hand, chord.position, 4, key),
       context,
     ));
   } else {
@@ -1217,7 +1225,7 @@ function fourNoteChordMusicForHand(settings, hand) {
       context,
       (chord, activeContext) => chordToken(
         chord.notes,
-        chordFingering('fourNoteChords', settings.fourNoteChordQuality, hand, chord.position, 4),
+        chordFingering('fourNoteChords', settings.fourNoteChordQuality, hand, chord.position, 4, key),
         activeContext,
       ),
       (chord) => pitchForChord(chord.notes),

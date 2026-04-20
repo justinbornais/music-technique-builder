@@ -43,13 +43,13 @@ function makeFourNoteChordFingerings() {
     right: {
       rootPosition: [1, 2, 4, 5],
       firstInversion: [1, 2, 4, 5],
-      secondInversion: [1, 2, 4, 5],
+      secondInversion: [1, 2, 3, 5],
       thirdInversion: [1, 2, 4, 5],
     },
     left: {
       rootPosition: [5, 4, 2, 1],
       firstInversion: [5, 4, 2, 1],
-      secondInversion: [5, 4, 2, 1],
+      secondInversion: [5, 3, 2, 1],
       thirdInversion: [5, 4, 2, 1],
     },
   };
@@ -269,7 +269,35 @@ export const FINGERING_DEFINITIONS = {
     augmented: makeTriadFingerings(),
   },
   fourNoteChords: {
-    major: makeFourNoteChordFingerings(),
+    major: {
+      ...makeFourNoteChordFingerings(),
+      keys: {
+        'C#': {
+          left: {
+            rootPosition: [5, 3, 2, 1],
+            firstInversion: [5, 4, 2, 1],
+            secondInversion: [5, 3, 2, 1],
+            thirdInversion: [5, 3, 2, 1],
+          },
+        },
+        Eb: {
+          left: {
+            rootPosition: [5, 3, 2, 1],
+            firstInversion: [5, 4, 2, 1],
+            secondInversion: [5, 3, 2, 1],
+            thirdInversion: [5, 3, 2, 1],
+          },
+        },
+        Ab: {
+          left: {
+            rootPosition: [5, 3, 2, 1],
+            firstInversion: [5, 4, 2, 1],
+            secondInversion: [5, 3, 2, 1],
+            thirdInversion: [5, 3, 2, 1],
+          },
+        },
+      },
+    },
     minor: makeFourNoteChordFingerings(),
     diminished: makeFourNoteChordFingerings(),
     augmented: makeFourNoteChordFingerings(),
