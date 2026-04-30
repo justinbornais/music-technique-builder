@@ -262,7 +262,7 @@
       staff_size_mm: staff-size / 1mm,
       width_mm: avail-width-mm,
       staff_spacing_mm: staff-spacing / 1mm,
-      system_spacing_mm: system-spacing / 1mm,
+      system_spacing_mm: 0,
       measures_per_line: measures-per-line,
       measure_numbers: measure-numbers,
       music_font: music-font,
@@ -276,7 +276,7 @@
 
     for system in result.systems {
       block(image(bytes(system.svg), format: "svg"))
-      v(system-spacing)
+      v(0mm)
     }
   }
 
@@ -319,7 +319,7 @@
     title: title,
     composer: composer,
     staff-size: staff-size,
-    system-spacing: system-spacing,
+    system-spacing: 0mm,
     lyric-line-spacing: lyric-line-spacing,
     color: color,
     note-colors: note-colors,
