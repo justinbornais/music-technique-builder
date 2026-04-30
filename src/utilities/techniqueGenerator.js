@@ -65,7 +65,6 @@ function noteFromPitch(pitch) {
 }
 
 const LEFT_HAND_TREBLE_MIN_PITCH = pitchFromNote(5, 4);
-const RIGHT_HAND_8VA_MIN_PITCH = pitchFromNote(10, 6);
 const SCALE_CLEF_CHANGE_GROUP_SIZE = 4;
 const CONTRARY_MOTION_TOP_ASCENDING_SEGMENT_INDEX = 3;
 const CONTRARY_MOTION_RIGHT_SEGMENTS = [
@@ -1267,40 +1266,6 @@ function noteInWrittenOctave(note, octaveOffset) {
   };
 }
 
-function noteInOttavaWrittenOctave(note) {
-  return {
-    ...note,
-    octave: note.octave - 1,
-  };
-}
-
-function tokensWithRightHandOttava(notes, context) {
-  const tokens = [];
-  let ottavaTokens = [];
-
-  const flushOttava = () => {
-    if (ottavaTokens.length === 0) return;
-    tokens.push(`8a{ ${ottavaTokens.join(' ')} }`);
-    ottavaTokens = [];
-  };
-
-  notes.forEach((note) => {
-    const useOttava = note.pitch > RIGHT_HAND_8VA_MIN_PITCH;
-    const token = noteToken(useOttava ? noteInOttavaWrittenOctave(note) : note, context);
-
-    if (useOttava) {
-      ottavaTokens.push(token);
-      return;
-    }
-
-    flushOttava();
-    tokens.push(token);
-  });
-
-  flushOttava();
-  return tokens;
-}
-
 function buildArpeggioNotes(settings, handConfig, option, octaves, inversion) {
   const keyOption = selectedKeyOption(settings);
   const rootOctave = arpeggioRootOctaveForKey(keyOption, handConfig);
@@ -1379,8 +1344,6 @@ function arpeggioMusicForHand(settings, hand) {
       pitchForNote,
       { roundToGroupSize: option.chordSize },
     );
-  } else if (hand === HANDS.RIGHT && option.chordSize === 4) {
-    tokens = tokensWithRightHandOttava(arpeggioNotes, context);
   } else {
     tokens = arpeggioNotes.map((note) => noteToken(note, context));
   }
