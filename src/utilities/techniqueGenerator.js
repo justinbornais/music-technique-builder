@@ -2694,12 +2694,43 @@ function stableIdForSource(source) {
   return `score-${(hash >>> 0).toString(36)}`;
 }
 
-export function buildTechniqueDocument(settings) {
+function singleTechniqueEntryForSettings(settings) {
   const title = techniqueLabel(settings);
 
+  if (settings.technique !== TECHNIQUE_TYPES.ARPEGGIO || !settings.includeArpeggioInversions) {
+    return { settings, title };
+  }
+
+  const option = arpeggioOptionForSettings(settings);
+  const settingsGroup = Array.from({ length: option.chordSize }, (_, inversion) => ({
+    ...settings,
+    arpeggioInversion: inversion,
+  }));
+
+  if (option.chordSize === 4) {
+    return {
+      settings,
+      settingsLines: [settingsGroup.slice(0, 2), settingsGroup.slice(2, 4)],
+      lineEndSeparators: [' | '],
+      techniqueCount: settingsGroup.length,
+      title,
+    };
+  }
+
   return {
+    settings,
+    settingsGroup,
+    techniqueCount: settingsGroup.length,
     title,
-    source: typstDocument(scoreCallForSettings(settings, title)),
+  };
+}
+
+export function buildTechniqueDocument(settings) {
+  const entry = singleTechniqueEntryForSettings(settings);
+
+  return {
+    title: entry.title,
+    source: typstDocument(scoreCallForEntry(entry)),
   };
 }
 

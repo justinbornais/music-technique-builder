@@ -150,6 +150,7 @@ export const DEFAULT_SETTINGS = {
   fourNoteChordQuality: 'major',
   seventhQuality: 'dominant7',
   arpeggioQuality: 'triad-major',
+  includeArpeggioInversions: false,
   hand: HANDS.RIGHT,
   octaves: 2,
   duration: 8,

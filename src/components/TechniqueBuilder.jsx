@@ -118,6 +118,17 @@ export default function TechniqueBuilder() {
     setHasPendingChanges(false);
   }, [pendingSettings]);
 
+  const exportTypst = useCallback(() => {
+    if (!document) return;
+    const blob = new Blob([document.source], { type: 'text/plain;charset=utf-8' });
+    const url = window.URL.createObjectURL(blob);
+    const link = window.document.createElement('a');
+    link.href = url;
+    link.download = `${document.title.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'technique'}.typ`;
+    link.click();
+    window.URL.revokeObjectURL(url);
+  }, [document]);
+
   useEffect(() => {
     void warmTypstRenderer();
   }, []);
@@ -308,6 +319,14 @@ export default function TechniqueBuilder() {
                 onChange={(value) => updateSetting('brokenChord', value)}
               />
             )}
+            {pendingSettings.technique === TECHNIQUE_TYPES.ARPEGGIO && (
+              <ToggleField
+                id="includeArpeggioInversions"
+                label="Include inversions"
+                checked={Boolean(pendingSettings.includeArpeggioInversions)}
+                onChange={(value) => updateSetting('includeArpeggioInversions', value)}
+              />
+            )}
           </div>
 
           <div className="action-row">
@@ -317,6 +336,9 @@ export default function TechniqueBuilder() {
               disabled={!hasPendingChanges}
             >
               {committedSettings === null ? 'Generate' : 'Regenerate'}
+            </button>
+            <button type="button" onClick={exportTypst} disabled={!committedSettings}>
+              Export
             </button>
           </div>
           </div>
