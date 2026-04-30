@@ -1061,7 +1061,7 @@ function contraryMotionSplitIndex(scaleNotes) {
   return midpoint - lower <= upper - midpoint ? lower : upper;
 }
 
-function contraryMotionStavesLinesForSettings(settings) {
+function contraryMotionSplitStavesForSettings(settings) {
   if (settings.technique !== TECHNIQUE_TYPES.CONTRARY_MOTION_SCALE) return null;
 
   const hands = handsForSettings(settings);
@@ -1070,26 +1070,26 @@ function contraryMotionStavesLinesForSettings(settings) {
 
   if (splitIndex >= handStates[0].scaleNotes.length) return null;
 
-  return [
-    { start: 0, end: splitIndex },
-    { start: splitIndex, end: handStates[0].scaleNotes.length },
-  ].map(({ start, end }) => handStates.map((handState) => {
-    const musicTokens = contraryMotionTokensForHandState(
+  return handStates.map((handState) => {
+    const firstLineTokens = contraryMotionTokensForHandState(
       settings,
       handState,
-      handState.scaleNotes.slice(start, end),
+      handState.scaleNotes.slice(0, splitIndex),
+    );
+    const secondLineTokens = contraryMotionTokensForHandState(
+      settings,
+      handState,
+      handState.scaleNotes.slice(splitIndex),
     );
 
-    if (start === 0) {
-      musicTokens.push('|');
-    }
+    firstLineTokens.push('|');
 
     return {
       clef: handState.handConfig.clef,
-      music: musicLine(musicTokens),
+      music: musicLine([...firstLineTokens, ...secondLineTokens]),
       fingeringPosition: handState.handConfig.fingeringPosition,
     };
-  }));
+  });
 }
 
 function scoreCallWithStaves(settings, staves, title, subtitle, options = {}) {
@@ -1661,18 +1661,18 @@ function scoreCallForSettingsGroup(
 }
 
 function scoreCallsForSingleSetting(settings, title, subtitle, options = {}) {
-  const stavesLines = contraryMotionStavesLinesForSettings(settings);
-  if (!stavesLines) {
+  const splitStaves = contraryMotionSplitStavesForSettings(settings);
+  if (!splitStaves) {
     return [scoreCallForSettingsGroup([settings], title, subtitle, options)];
   }
 
-  return stavesLines.map((staves, index) => scoreCallWithStaves(
+  return [scoreCallWithStaves(
     settings,
-    staves,
-    index === 0 ? title : '',
-    index === 0 ? subtitle : '',
-    options,
-  ));
+    splitStaves,
+    title,
+    subtitle,
+    { ...options, measuresPerLine: options.measuresPerLine ?? 1 },
+  )];
 }
 
 function scoreCallForSettings(
