@@ -625,7 +625,7 @@ function buildLevel6Entries(shared) {
     ...seventhChordEntries(shared, {
       dominantKeys: ['G', 'E', 'B', 'Db'],
       diminishedKeys: ['G', 'E', 'B', 'C#'],
-      octaves: 2,
+      octaves: 1,
       hand: HANDS.SEPARATE,
       brokenDuration: 8,
       solidDuration: 4,
@@ -661,7 +661,7 @@ function buildLevel7Entries(shared) {
     ...fourNoteChordEntries(shared, {
       majorKeys: ['C', 'D', 'F', 'Ab', 'Gb'],
       minorKeys: ['C', 'D', 'F', 'G#', 'F#'],
-      octaves: 2,
+      octaves: 1,
       hand: HANDS.TOGETHER,
       brokenDuration: 16,
       solidDuration: 4,
@@ -670,7 +670,7 @@ function buildLevel7Entries(shared) {
     ...seventhChordEntries(shared, {
       dominantKeys: ['C', 'D', 'F', 'Ab', 'Gb'],
       diminishedKeys: ['C', 'D', 'F', 'G#', 'F#'],
-      octaves: 2,
+      octaves: 1,
       hand: HANDS.TOGETHER,
       brokenDuration: 16,
       solidDuration: 4,
@@ -706,7 +706,7 @@ function buildLevel8Entries(shared) {
     ...fourNoteChordEntries(shared, {
       majorKeys: ['C', 'D', 'E', 'Bb', 'Eb', 'Gb'],
       minorKeys: ['C', 'D', 'E', 'Bb', 'Eb', 'F#'],
-      octaves: 2,
+      octaves: 1,
       hand: HANDS.TOGETHER,
       brokenDuration: 16,
       solidDuration: 4,
@@ -715,7 +715,7 @@ function buildLevel8Entries(shared) {
     ...seventhChordEntries(shared, {
       dominantKeys: ['C', 'D', 'E', 'Bb', 'Eb', 'Gb'],
       diminishedKeys: ['C', 'D', 'E', 'Bb', 'Eb', 'F#'],
-      octaves: 2,
+      octaves: 1,
       hand: HANDS.TOGETHER,
       brokenDuration: 16,
       solidDuration: 4,
@@ -751,7 +751,7 @@ function buildLevel9Entries(shared) {
     ...fourNoteChordEntries(shared, {
       majorKeys: ['C', 'Bb', 'D', 'Eb', 'E', 'F'],
       minorKeys: ['C', 'C#', 'D', 'Eb', 'E', 'F'],
-      octaves: 2,
+      octaves: 1,
       hand: HANDS.TOGETHER,
       brokenDuration: 16,
       solidDuration: 4,
@@ -759,7 +759,7 @@ function buildLevel9Entries(shared) {
     ...seventhChordEntries(shared, {
       dominantKeys: ['C', 'Db', 'D', 'Eb', 'E', 'F'],
       diminishedKeys: ['C', 'C#', 'D', 'Eb', 'E', 'F'],
-      octaves: 2,
+      octaves: 1,
       hand: HANDS.TOGETHER,
       brokenDuration: 16,
       solidDuration: 4,
@@ -791,7 +791,7 @@ function buildLevel10Entries(shared) {
     ...fourNoteChordEntries(shared, {
       majorKeys: ['Gb', 'G', 'Ab', 'A', 'Bb', 'B'],
       minorKeys: ['F#', 'G', 'G#', 'A', 'Bb', 'B'],
-      octaves: 2,
+      octaves: 1,
       hand: HANDS.TOGETHER,
       brokenDuration: 16,
       solidDuration: 4,
@@ -799,7 +799,7 @@ function buildLevel10Entries(shared) {
     ...seventhChordEntries(shared, {
       dominantKeys: ['Gb', 'G', 'Ab', 'A', 'Bb', 'B'],
       diminishedKeys: ['F#', 'G', 'G#', 'A', 'Bb', 'B'],
-      octaves: 2,
+      octaves: 1,
       hand: HANDS.TOGETHER,
       brokenDuration: 16,
       solidDuration: 4,
