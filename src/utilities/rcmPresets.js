@@ -1,5 +1,6 @@
 import { scaleTypes } from './noteConversions.js';
 import {
+  CHROMATIC_KEY_PAIRS,
   DEFAULT_COLLECTION_SETTINGS,
   DEFAULT_SETTINGS,
   DIRECTIONS,
@@ -25,6 +26,10 @@ const SEVENTH_LABELS = {
   dominant7: 'Dominant 7th',
   diminished7: 'Diminished 7th',
 };
+
+const RELATIVE_MINOR_BY_MAJOR = Object.fromEntries(
+  CHROMATIC_KEY_PAIRS.map(({ major, minor }) => [major, minor]),
+);
 
 const RCM_PRESET_DEFINITIONS = [
   {
@@ -137,6 +142,33 @@ function withDetailOctaves(overrides, detailOctaves) {
   return detailOctaves ? { ...overrides, detailOctaves } : overrides;
 }
 
+function toEntryArray(entryOrEntries) {
+  return Array.isArray(entryOrEntries) ? entryOrEntries : [entryOrEntries];
+}
+
+function pairRelativeEntries(majorKeys, minorKeys, buildMajorEntries, buildMinorEntries) {
+  const remainingMinorKeys = new Set(minorKeys);
+  const entries = [];
+
+  majorKeys.forEach((majorKey) => {
+    entries.push(...toEntryArray(buildMajorEntries(majorKey)));
+
+    const relativeMinorKey = RELATIVE_MINOR_BY_MAJOR[majorKey];
+    if (relativeMinorKey && remainingMinorKeys.has(relativeMinorKey)) {
+      entries.push(...toEntryArray(buildMinorEntries(relativeMinorKey)));
+      remainingMinorKeys.delete(relativeMinorKey);
+    }
+  });
+
+  minorKeys.forEach((minorKey) => {
+    if (!remainingMinorKeys.has(minorKey)) return;
+    entries.push(...toEntryArray(buildMinorEntries(minorKey)));
+    remainingMinorKeys.delete(minorKey);
+  });
+
+  return entries;
+}
+
 function majorScaleEntries(shared, keys, octaves, hand, duration, detailOctaves = null) {
   return keys.map((key) => singleEntry(
     makeBaseSettings(shared, withDetailOctaves({
@@ -191,6 +223,23 @@ function chromaticEntries(shared, keys, octaves, hand, duration, detailOctaves =
   ));
 }
 
+function scaleEntries(shared, {
+  majorKeys,
+  minorKeys,
+  minorScaleTypes,
+  octaves,
+  hand,
+  duration,
+  detailOctaves = null,
+}) {
+  return pairRelativeEntries(
+    majorKeys,
+    minorKeys,
+    (key) => majorScaleEntries(shared, [key], octaves, hand, duration, detailOctaves),
+    (key) => minorScaleEntries(shared, [key], minorScaleTypes, octaves, hand, duration, detailOctaves),
+  );
+}
+
 function triadEntries(shared, {
   majorKeys,
   minorKeys,
@@ -200,10 +249,12 @@ function triadEntries(shared, {
   solidDuration,
   solidWithRest,
 }) {
-  return [
-    ...majorKeys.map((key) => groupedTriadEntry(shared, key, 'major', octaves, hand, brokenDuration, solidDuration, solidWithRest)),
-    ...minorKeys.map((key) => groupedTriadEntry(shared, key, 'minor', octaves, hand, brokenDuration, solidDuration, solidWithRest)),
-  ];
+  return pairRelativeEntries(
+    majorKeys,
+    minorKeys,
+    (key) => groupedTriadEntry(shared, key, 'major', octaves, hand, brokenDuration, solidDuration, solidWithRest),
+    (key) => groupedTriadEntry(shared, key, 'minor', octaves, hand, brokenDuration, solidDuration, solidWithRest),
+  );
 }
 
 function fourNoteChordEntries(shared, {
@@ -217,8 +268,10 @@ function fourNoteChordEntries(shared, {
   solidWithRest = false,
   brokenOnly = false,
 }) {
-  return [
-    ...majorKeys.map((key) => chordEntry(shared, {
+  return pairRelativeEntries(
+    majorKeys,
+    minorKeys,
+    (key) => chordEntry(shared, {
       key,
       quality: 'major',
       title: `${key} Major 4 Note Chords`,
@@ -231,8 +284,8 @@ function fourNoteChordEntries(shared, {
       brokenOnly,
       technique: TECHNIQUE_TYPES.FOUR_NOTE_CHORD,
       qualityKey: 'fourNoteChordQuality',
-    })),
-    ...minorKeys.map((key) => chordEntry(shared, {
+    }),
+    (key) => chordEntry(shared, {
       key,
       quality: 'minor',
       title: `${key} Minor 4 Note Chords`,
@@ -245,8 +298,8 @@ function fourNoteChordEntries(shared, {
       brokenOnly,
       technique: TECHNIQUE_TYPES.FOUR_NOTE_CHORD,
       qualityKey: 'fourNoteChordQuality',
-    })),
-  ];
+    }),
+  );
 }
 
 function seventhChordEntries(shared, {
@@ -259,8 +312,10 @@ function seventhChordEntries(shared, {
   solidDuration,
   solidWithRest = false,
 }) {
-  return [
-    ...dominantKeys.flatMap((key) => separatedSeventhEntries(
+  return pairRelativeEntries(
+    dominantKeys,
+    diminishedKeys,
+    (key) => separatedSeventhEntries(
       shared,
       key,
       'dominant7',
@@ -270,8 +325,8 @@ function seventhChordEntries(shared, {
       brokenDuration,
       solidDuration,
       solidWithRest,
-    )),
-    ...diminishedKeys.flatMap((key) => separatedSeventhEntries(
+    ),
+    (key) => separatedSeventhEntries(
       shared,
       key,
       'diminished7',
@@ -281,8 +336,8 @@ function seventhChordEntries(shared, {
       brokenDuration,
       solidDuration,
       solidWithRest,
-    )),
-  ];
+    ),
+  );
 }
 
 function triadArpeggioEntries(shared, {
@@ -294,8 +349,10 @@ function triadArpeggioEntries(shared, {
   duration,
   includeInversions,
 }) {
-  return [
-    ...majorKeys.map((key) => arpeggioEntry(shared, {
+  return pairRelativeEntries(
+    majorKeys,
+    minorKeys,
+    (key) => arpeggioEntry(shared, {
       key,
       arpeggioQuality: 'triad-major',
       title: `${key} Major Triad Arpeggio`,
@@ -304,8 +361,8 @@ function triadArpeggioEntries(shared, {
       hand,
       duration,
       includeInversions,
-    })),
-    ...minorKeys.map((key) => arpeggioEntry(shared, {
+    }),
+    (key) => arpeggioEntry(shared, {
       key,
       arpeggioQuality: 'triad-minor',
       title: `${key} Minor Triad Arpeggio`,
@@ -314,8 +371,8 @@ function triadArpeggioEntries(shared, {
       hand,
       duration,
       includeInversions,
-    })),
-  ];
+    }),
+  );
 }
 
 function seventhArpeggioEntries(shared, {
@@ -327,8 +384,10 @@ function seventhArpeggioEntries(shared, {
   duration,
   includeInversions,
 }) {
-  return [
-    ...dominantKeys.map((key) => arpeggioEntry(shared, {
+  return pairRelativeEntries(
+    dominantKeys,
+    diminishedKeys,
+    (key) => arpeggioEntry(shared, {
       key,
       arpeggioQuality: 'seventh-dominant7',
       title: `${key} Dominant 7th Arpeggio`,
@@ -337,8 +396,8 @@ function seventhArpeggioEntries(shared, {
       hand,
       duration,
       includeInversions,
-    })),
-    ...diminishedKeys.map((key) => arpeggioEntry(shared, {
+    }),
+    (key) => arpeggioEntry(shared, {
       key,
       arpeggioQuality: 'seventh-diminished7',
       title: `${key} Diminished 7th Arpeggio`,
@@ -347,8 +406,8 @@ function seventhArpeggioEntries(shared, {
       hand,
       duration,
       includeInversions,
-    })),
-  ];
+    }),
+  );
 }
 
 function singleEntry(settings, title) {
@@ -507,8 +566,14 @@ function arpeggioEntry(shared, {
 
 function buildLevel1Entries(shared) {
   return [
-    ...majorScaleEntries(shared, ['C', 'G', 'F'], 2, HANDS.SEPARATE, 8),
-    ...minorScaleEntries(shared, ['A', 'E', 'D'], [scaleTypes.MINOR_N, scaleTypes.MINOR_H], 2, HANDS.SEPARATE, 8),
+    ...scaleEntries(shared, {
+      majorKeys: ['C', 'G', 'F'],
+      minorKeys: ['A', 'E', 'D'],
+      minorScaleTypes: [scaleTypes.MINOR_N, scaleTypes.MINOR_H],
+      octaves: 2,
+      hand: HANDS.SEPARATE,
+      duration: 8,
+    }),
     ...contraryMotionEntries(shared, { [scaleTypes.MAJOR]: ['C'] }, HANDS.TOGETHER, 8),
     ...chromaticEntries(shared, ['C'], 1, HANDS.SEPARATE, 8),
     ...triadEntries(shared, {
@@ -525,8 +590,14 @@ function buildLevel1Entries(shared) {
 
 function buildLevel2Entries(shared) {
   return [
-    ...majorScaleEntries(shared, ['G', 'F', 'Bb'], 2, HANDS.SEPARATE, 8),
-    ...minorScaleEntries(shared, ['E', 'D', 'G'], [scaleTypes.MINOR_H, scaleTypes.MINOR_M], 2, HANDS.SEPARATE, 8),
+    ...scaleEntries(shared, {
+      majorKeys: ['G', 'F', 'Bb'],
+      minorKeys: ['E', 'D', 'G'],
+      minorScaleTypes: [scaleTypes.MINOR_H, scaleTypes.MINOR_M],
+      octaves: 2,
+      hand: HANDS.SEPARATE,
+      duration: 8,
+    }),
     ...contraryMotionEntries(shared, { [scaleTypes.MAJOR]: ['C', 'G'] }, HANDS.TOGETHER, 8),
     ...chromaticEntries(shared, ['G'], 1, HANDS.SEPARATE, 8),
     ...triadEntries(shared, {
@@ -543,8 +614,14 @@ function buildLevel2Entries(shared) {
 
 function buildLevel3Entries(shared) {
   return [
-    ...majorScaleEntries(shared, ['D', 'F', 'Bb'], 2, HANDS.TOGETHER, 8),
-    ...minorScaleEntries(shared, ['B', 'D', 'G'], [scaleTypes.MINOR_H, scaleTypes.MINOR_M], 2, HANDS.TOGETHER, 8),
+    ...scaleEntries(shared, {
+      majorKeys: ['D', 'F', 'Bb'],
+      minorKeys: ['B', 'D', 'G'],
+      minorScaleTypes: [scaleTypes.MINOR_H, scaleTypes.MINOR_M],
+      octaves: 2,
+      hand: HANDS.TOGETHER,
+      duration: 8,
+    }),
     ...contraryMotionEntries(shared, { [scaleTypes.MAJOR]: ['D'] }, HANDS.TOGETHER, 8),
     ...chromaticEntries(shared, ['D'], 1, HANDS.SEPARATE, 8),
     ...triadEntries(shared, {
@@ -561,8 +638,14 @@ function buildLevel3Entries(shared) {
 
 function buildLevel4Entries(shared) {
   return [
-    ...majorScaleEntries(shared, ['D', 'A', 'Bb', 'Eb'], 2, HANDS.TOGETHER, 8),
-    ...minorScaleEntries(shared, ['B', 'G', 'C'], [scaleTypes.MINOR_H, scaleTypes.MINOR_M], 2, HANDS.TOGETHER, 8),
+    ...scaleEntries(shared, {
+      majorKeys: ['D', 'A', 'Bb', 'Eb'],
+      minorKeys: ['B', 'G', 'C'],
+      minorScaleTypes: [scaleTypes.MINOR_H, scaleTypes.MINOR_M],
+      octaves: 2,
+      hand: HANDS.TOGETHER,
+      duration: 8,
+    }),
     ...contraryMotionEntries(shared, { [scaleTypes.MINOR_H]: ['C'] }, HANDS.TOGETHER, 8),
     ...chromaticEntries(shared, ['C'], 1, HANDS.SEPARATE, 8),
     ...triadEntries(shared, {
@@ -587,8 +670,14 @@ function buildLevel4Entries(shared) {
 
 function buildLevel5Entries(shared) {
   return [
-    ...majorScaleEntries(shared, ['A', 'E', 'F', 'Ab'], 2, HANDS.TOGETHER, 8),
-    ...minorScaleEntries(shared, ['A', 'E', 'F'], [scaleTypes.MINOR_H, scaleTypes.MINOR_M], 2, HANDS.TOGETHER, 8),
+    ...scaleEntries(shared, {
+      majorKeys: ['A', 'E', 'F', 'Ab'],
+      minorKeys: ['A', 'E', 'F'],
+      minorScaleTypes: [scaleTypes.MINOR_H, scaleTypes.MINOR_M],
+      octaves: 2,
+      hand: HANDS.TOGETHER,
+      duration: 8,
+    }),
     ...contraryMotionEntries(shared, {
       [scaleTypes.MAJOR]: ['A'],
       [scaleTypes.MINOR_H]: ['A'],
@@ -624,8 +713,14 @@ function buildLevel5Entries(shared) {
 
 function buildLevel6Entries(shared) {
   return [
-    ...majorScaleEntries(shared, ['G', 'E', 'B', 'Bb'], 2, HANDS.TOGETHER, 16),
-    ...minorScaleEntries(shared, ['G', 'E', 'B', 'C#'], [scaleTypes.MINOR_H, scaleTypes.MINOR_M], 2, HANDS.TOGETHER, 16),
+    ...scaleEntries(shared, {
+      majorKeys: ['G', 'E', 'B', 'Bb'],
+      minorKeys: ['G', 'E', 'B', 'C#'],
+      minorScaleTypes: [scaleTypes.MINOR_H, scaleTypes.MINOR_M],
+      octaves: 2,
+      hand: HANDS.TOGETHER,
+      duration: 16,
+    }),
     ...contraryMotionEntries(shared, {
       [scaleTypes.MAJOR]: ['E'],
       [scaleTypes.MINOR_H]: ['E'],
@@ -670,8 +765,14 @@ function buildLevel6Entries(shared) {
 
 function buildLevel7Entries(shared) {
   return [
-    ...majorScaleEntries(shared, ['C', 'D', 'F', 'Ab', 'Gb'], 2, HANDS.TOGETHER, 16),
-    ...minorScaleEntries(shared, ['C', 'D', 'F', 'G#', 'F#'], [scaleTypes.MINOR_H, scaleTypes.MINOR_M], 2, HANDS.TOGETHER, 16),
+    ...scaleEntries(shared, {
+      majorKeys: ['C', 'D', 'F', 'Ab', 'Gb'],
+      minorKeys: ['C', 'D', 'F', 'G#', 'F#'],
+      minorScaleTypes: [scaleTypes.MINOR_H, scaleTypes.MINOR_M],
+      octaves: 2,
+      hand: HANDS.TOGETHER,
+      duration: 16,
+    }),
     ...contraryMotionEntries(shared, {
       [scaleTypes.MAJOR]: ['D'],
       [scaleTypes.MINOR_H]: ['D'],
@@ -717,8 +818,15 @@ function buildLevel7Entries(shared) {
 
 function buildLevel8Entries(shared) {
   return [
-    ...majorScaleEntries(shared, ['C', 'D', 'E', 'Bb', 'Eb', 'Gb'], 2, HANDS.TOGETHER, 16, 4),
-    ...minorScaleEntries(shared, ['C', 'D', 'E', 'Bb', 'Eb', 'F#'], [scaleTypes.MINOR_H, scaleTypes.MINOR_M], 2, HANDS.TOGETHER, 16, 4),
+    ...scaleEntries(shared, {
+      majorKeys: ['C', 'D', 'E', 'Bb', 'Eb', 'Gb'],
+      minorKeys: ['C', 'D', 'E', 'Bb', 'Eb', 'F#'],
+      minorScaleTypes: [scaleTypes.MINOR_H, scaleTypes.MINOR_M],
+      octaves: 2,
+      hand: HANDS.TOGETHER,
+      duration: 16,
+      detailOctaves: 4,
+    }),
     ...contraryMotionEntries(shared, {
       [scaleTypes.MAJOR]: ['Eb'],
       [scaleTypes.MINOR_H]: ['Eb'],
@@ -766,8 +874,15 @@ function buildLevel8Entries(shared) {
 
 function buildLevel9Entries(shared) {
   return [
-    ...majorScaleEntries(shared, ['C', 'Db', 'D', 'Eb', 'E', 'F'], 2, HANDS.TOGETHER, 16, 4),
-    ...minorScaleEntries(shared, ['C', 'C#', 'D', 'Eb', 'E', 'F'], [scaleTypes.MINOR_H, scaleTypes.MINOR_M], 2, HANDS.TOGETHER, 16, 4),
+    ...scaleEntries(shared, {
+      majorKeys: ['C', 'Db', 'D', 'Eb', 'E', 'F'],
+      minorKeys: ['C', 'C#', 'D', 'Eb', 'E', 'F'],
+      minorScaleTypes: [scaleTypes.MINOR_H, scaleTypes.MINOR_M],
+      octaves: 2,
+      hand: HANDS.TOGETHER,
+      duration: 16,
+      detailOctaves: 4,
+    }),
     ...contraryMotionEntries(shared, {
       [scaleTypes.MAJOR]: ['F', 'Db'],
       [scaleTypes.MINOR_H]: ['F', 'C#'],
@@ -814,8 +929,15 @@ function buildLevel9Entries(shared) {
 
 function buildLevel10Entries(shared) {
   return [
-    ...majorScaleEntries(shared, ['Gb', 'G', 'Ab', 'A', 'Bb', 'B'], 2, HANDS.TOGETHER, 16, 4),
-    ...minorScaleEntries(shared, ['F#', 'G', 'G#', 'A', 'Bb', 'B'], [scaleTypes.MINOR_H, scaleTypes.MINOR_M], 2, HANDS.TOGETHER, 16, 4),
+    ...scaleEntries(shared, {
+      majorKeys: ['Gb', 'G', 'Ab', 'A', 'Bb', 'B'],
+      minorKeys: ['F#', 'G', 'G#', 'A', 'Bb', 'B'],
+      minorScaleTypes: [scaleTypes.MINOR_H, scaleTypes.MINOR_M],
+      octaves: 2,
+      hand: HANDS.TOGETHER,
+      duration: 16,
+      detailOctaves: 4,
+    }),
     ...chromaticEntries(shared, ['F#', 'G', 'Ab', 'A', 'Bb', 'B'], 2, HANDS.TOGETHER, 16, 4),
     ...fourNoteChordEntries(shared, {
       majorKeys: ['Gb', 'G', 'Ab', 'A', 'Bb', 'B'],
