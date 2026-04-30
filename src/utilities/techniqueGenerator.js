@@ -1073,11 +1073,23 @@ function contraryMotionStavesLinesForSettings(settings) {
   return [
     { start: 0, end: splitIndex },
     { start: splitIndex, end: handStates[0].scaleNotes.length },
-  ].map(({ start, end }) => handStates.map((handState) => ({
-    clef: handState.handConfig.clef,
-    music: musicLine(contraryMotionTokensForHandState(settings, handState, handState.scaleNotes.slice(start, end))),
-    fingeringPosition: handState.handConfig.fingeringPosition,
-  })));
+  ].map(({ start, end }) => handStates.map((handState) => {
+    const musicTokens = contraryMotionTokensForHandState(
+      settings,
+      handState,
+      handState.scaleNotes.slice(start, end),
+    );
+
+    if (start === 0) {
+      musicTokens.push('|');
+    }
+
+    return {
+      clef: handState.handConfig.clef,
+      music: musicLine(musicTokens),
+      fingeringPosition: handState.handConfig.fingeringPosition,
+    };
+  }));
 }
 
 function scoreCallWithStaves(settings, staves, title, subtitle, options = {}) {
