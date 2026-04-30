@@ -1012,7 +1012,6 @@ export default function TechniqueCollectionBuilder() {
         <div className="navbar-presets">
           <div className="navbar-selectors">
             <label className="navbar-select-group" htmlFor="templatePreset">
-              <span>Template</span>
               <div className="navbar-select-shell">
                 <select
                   id="templatePreset"
@@ -1020,7 +1019,7 @@ export default function TechniqueCollectionBuilder() {
                   value={!isCustomPreset && !activeRcmPreset ? activePreset : ''}
                   onChange={(event) => event.target.value && handlePresetChange(event.target.value)}
                 >
-                  <option value="">Choose template</option>
+                  <option value="">Choose template...</option>
                   {templatePresetOptions.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
@@ -1031,7 +1030,6 @@ export default function TechniqueCollectionBuilder() {
             </label>
 
             <label className="navbar-select-group" htmlFor="rcmPreset">
-              <span>RCM</span>
               <div className="navbar-select-shell">
                 <select
                   id="rcmPreset"
@@ -1039,7 +1037,7 @@ export default function TechniqueCollectionBuilder() {
                   value={activeRcmPreset ? activePreset : ''}
                   onChange={(event) => event.target.value && handlePresetChange(event.target.value)}
                 >
-                  <option value="">Choose level</option>
+                  <option value="">Choose RCM level...</option>
                   {RCM_PRESET_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
