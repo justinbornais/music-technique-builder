@@ -274,10 +274,11 @@
     let result-bytes = scorify-wasm.render_score(bytes(json.encode(input)))
     let result = json(result-bytes)
 
-    for system in result.systems {
-      block(image(bytes(system.svg), format: "svg"))
-      v(0mm)
-    }
+    stack(
+      dir: ttb,
+      spacing: 0mm,
+      ..result.systems.map(system => image(bytes(system.svg), format: "svg")),
+    )
   }
 
   if width == auto {
