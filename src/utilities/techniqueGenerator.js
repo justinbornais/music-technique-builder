@@ -322,6 +322,12 @@ function explicitTechniqueOctaves(settings) {
   return Number.isFinite(value) ? Math.max(1, value) : null;
 }
 
+function subtitleOctaves(settings) {
+  const value = Number(settings.detailOctaves);
+  if (Number.isFinite(value)) return Math.max(1, value);
+  return effectiveOctaves(settings);
+}
+
 function effectiveOctaves(settings) {
   const explicitOctaves = explicitTechniqueOctaves(settings);
 
@@ -1542,7 +1548,7 @@ function handLabelForSettings(settings) {
 }
 
 function subtitleForSettings(settings) {
-  const octaves = effectiveOctaves(settings);
+  const octaves = subtitleOctaves(settings);
   return `${handLabelForSettings(settings)} | ${octaves} octave${octaves === 1 ? '' : 's'} | ${
     getOption(DURATION_OPTIONS, techniqueDuration(settings)).label
   }`;
