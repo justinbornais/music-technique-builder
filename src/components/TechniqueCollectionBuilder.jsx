@@ -1013,36 +1013,40 @@ export default function TechniqueCollectionBuilder() {
           <div className="navbar-selectors">
             <label className="navbar-select-group" htmlFor="templatePreset">
               <span>Template</span>
-              <select
-                id="templatePreset"
-                className="navbar-select"
-                value={!isCustomPreset && !activeRcmPreset ? activePreset : ''}
-                onChange={(event) => event.target.value && handlePresetChange(event.target.value)}
-              >
-                <option value="">Choose template</option>
-                {templatePresetOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+              <div className="navbar-select-shell">
+                <select
+                  id="templatePreset"
+                  className="navbar-select"
+                  value={!isCustomPreset && !activeRcmPreset ? activePreset : ''}
+                  onChange={(event) => event.target.value && handlePresetChange(event.target.value)}
+                >
+                  <option value="">Choose template</option>
+                  {templatePresetOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </label>
 
             <label className="navbar-select-group" htmlFor="rcmPreset">
               <span>RCM</span>
-              <select
-                id="rcmPreset"
-                className="navbar-select"
-                value={activeRcmPreset ? activePreset : ''}
-                onChange={(event) => event.target.value && handlePresetChange(event.target.value)}
-              >
-                <option value="">Choose level</option>
-                {RCM_PRESET_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+              <div className="navbar-select-shell">
+                <select
+                  id="rcmPreset"
+                  className="navbar-select"
+                  value={activeRcmPreset ? activePreset : ''}
+                  onChange={(event) => event.target.value && handlePresetChange(event.target.value)}
+                >
+                  <option value="">Choose level</option>
+                  {RCM_PRESET_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </label>
 
             <button
