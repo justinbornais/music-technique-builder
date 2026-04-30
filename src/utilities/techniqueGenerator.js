@@ -1082,7 +1082,6 @@ function contraryMotionStavesLinesForSettings(settings) {
 
 function scoreCallWithStaves(settings, staves, title, subtitle, options = {}) {
   const key = keyForSettings(settings);
-  const systemSpacing = options.compact ? '2mm' : '9mm';
 
   return `#score(
   title: ${typstString(title)},
@@ -1090,8 +1089,7 @@ function scoreCallWithStaves(settings, staves, title, subtitle, options = {}) {
   key: ${typstString(key)},
   staff-group: ${typstString(staffGroupForSettings(settings, staves))},
   staff-size: ${staffSizeForSettings(settings)}mm,
-  staff-spacing: 9mm,
-  system-spacing: ${systemSpacing},
+  staff-spacing: 6mm,
   width: 235mm,
   measure-numbers: "none",
   staves: (
