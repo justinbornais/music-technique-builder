@@ -19,22 +19,26 @@ import {
   buildTechniqueCollectionDocument,
   collectionEntriesForSettings,
 } from '../utilities/techniqueGenerator.js';
+import {
+  buildRcmPresetSettings,
+  isRcmPreset,
+  RCM_PRESET_OPTIONS,
+} from '../utilities/rcmPresets.js';
 import { renderTypstSvgBatch, warmTypstRenderer } from '../utilities/typstRenderer.js';
 
 // ─── Constants ───
 
 const PRESETS = {
-  BEGINNER: 'beginner',
-  INTERMEDIATE: 'intermediate',
-  ADVANCED: 'advanced',
+  BEGINNER: 'template:beginner',
+  INTERMEDIATE: 'template:intermediate',
+  ADVANCED: 'template:advanced',
   CUSTOM: 'custom',
 };
 
-const presetTabs = [
+const templatePresetOptions = [
   { value: PRESETS.BEGINNER, label: 'Beginner' },
   { value: PRESETS.INTERMEDIATE, label: 'Intermediate' },
   { value: PRESETS.ADVANCED, label: 'Advanced' },
-  { value: PRESETS.CUSTOM, label: 'Custom' },
 ];
 
 const handOptions = [
@@ -583,10 +587,12 @@ export default function TechniqueCollectionBuilder() {
   const dragEntryItem = useRef(null);
   const [customEntryOrder, setCustomEntryOrder] = useState(null);
   const [showEntryOrder, setShowEntryOrder] = useState(false);
+  const isCustomPreset = activePreset === PRESETS.CUSTOM;
+  const activeRcmPreset = isRcmPreset(activePreset);
 
   // Build effective settings from preset + shared
   const pendingSettings = useMemo(() => {
-    if (activePreset === PRESETS.CUSTOM) {
+    if (isCustomPreset) {
       return {
         ...DEFAULT_COLLECTION_SETTINGS,
         ...customSettings,
@@ -597,12 +603,25 @@ export default function TechniqueCollectionBuilder() {
         allowedSeventhArpeggioKeysByQuality: customSeventhKeysBySection.seventhArpeggios,
       };
     }
+
+    if (activeRcmPreset) {
+      return buildRcmPresetSettings(activePreset, sharedSettings);
+    }
+
     return presetToSettings(activePreset, sharedSettings);
-  }, [activePreset, sharedSettings, customSettings, customSectionOrder, customSeventhKeysBySection]);
+  }, [
+    activePreset,
+    activeRcmPreset,
+    isCustomPreset,
+    sharedSettings,
+    customSettings,
+    customSectionOrder,
+    customSeventhKeysBySection,
+  ]);
 
   // Preview entries for custom mode entry reordering
   const previewEntries = useMemo(() => {
-    if (activePreset !== PRESETS.CUSTOM) return [];
+    if (!isCustomPreset) return [];
     const enabledSectionIds = customSectionOrder.filter((sectionId) => {
       const section = CUSTOM_SECTIONS.find((candidate) => candidate.id === sectionId);
       return section ? customSettings[section.settingKey] : false;
@@ -615,7 +634,7 @@ export default function TechniqueCollectionBuilder() {
       customSeventhKeysBySection,
     );
   }, [
-    activePreset,
+    isCustomPreset,
     pendingSettings,
     customSectionOrder,
     customSettings,
@@ -664,7 +683,7 @@ export default function TechniqueCollectionBuilder() {
   }, []);
 
   const handleGenerate = useCallback(() => {
-    if (activePreset === PRESETS.CUSTOM) {
+    if (isCustomPreset) {
       const customEntries = customEntryOrder
         ? customEntryOrder.map((i) => previewEntries[i])
         : previewEntries;
@@ -673,7 +692,7 @@ export default function TechniqueCollectionBuilder() {
       setCommittedSettings(pendingSettings);
     }
     setHasPendingChanges(false);
-  }, [pendingSettings, activePreset, customEntryOrder, previewEntries]);
+  }, [pendingSettings, isCustomPreset, customEntryOrder, previewEntries]);
 
   const exportTypst = useCallback(() => {
     if (!document) return;
@@ -991,17 +1010,48 @@ export default function TechniqueCollectionBuilder() {
         </div>
 
         <div className="navbar-presets">
-          <div className="preset-tabs">
-            {presetTabs.map((tab) => (
-              <button
-                key={tab.value}
-                type="button"
-                className={`preset-tab${activePreset === tab.value ? ' active' : ''}`}
-                onClick={() => handlePresetChange(tab.value)}
+          <div className="navbar-selectors">
+            <label className="navbar-select-group" htmlFor="templatePreset">
+              <span>Template</span>
+              <select
+                id="templatePreset"
+                className="navbar-select"
+                value={!isCustomPreset && !activeRcmPreset ? activePreset : ''}
+                onChange={(event) => event.target.value && handlePresetChange(event.target.value)}
               >
-                {tab.label}
-              </button>
-            ))}
+                <option value="">Choose template</option>
+                {templatePresetOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="navbar-select-group" htmlFor="rcmPreset">
+              <span>RCM</span>
+              <select
+                id="rcmPreset"
+                className="navbar-select"
+                value={activeRcmPreset ? activePreset : ''}
+                onChange={(event) => event.target.value && handlePresetChange(event.target.value)}
+              >
+                <option value="">Choose level</option>
+                {RCM_PRESET_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <button
+              type="button"
+              className={`navbar-mode-button${isCustomPreset ? ' active' : ''}`}
+              onClick={() => handlePresetChange(PRESETS.CUSTOM)}
+            >
+              Custom
+            </button>
           </div>
         </div>
 
@@ -1022,82 +1072,120 @@ export default function TechniqueCollectionBuilder() {
       <section className="workbench" aria-label="Technique collection generator">
         <div className="controls">
           <div className="controls-inner">
-            {/* Shared Controls */}
-            <p className="section-label">Settings</p>
-            <div className="control-grid">
-              <SelectField
-                id="keyOrder"
-                label="Key order"
-                value={sharedSettings.keyOrder}
-                options={keyOrderOptions}
-                onChange={(v) => updateShared('keyOrder', v)}
-              />
-              <SelectField
-                id="renderMode"
-                label="Notation"
-                value={sharedSettings.renderMode}
-                options={renderModeOptions}
-                onChange={(v) => updateShared('renderMode', v)}
-              />
-              <SelectField
-                id="hand"
-                label="Hand"
-                value={sharedSettings.hand}
-                options={handOptions}
-                onChange={(v) => updateShared('hand', v)}
-              />
-              <SelectField
-                id="direction"
-                label="Direction"
-                value={sharedSettings.direction}
-                options={directionOptions}
-                onChange={(v) => updateShared('direction', v)}
-              />
-              <SelectField
-                id="duration"
-                label="Duration"
-                value={sharedSettings.duration}
-                options={DURATION_OPTIONS}
-                onChange={(v) => updateShared('duration', Number(v))}
-              />
-              <SelectField
-                id="displayScale"
-                label="Display size"
-                value={sharedSettings.displayScale}
-                options={DISPLAY_SIZE_OPTIONS}
-                onChange={(v) => updateShared('displayScale', Number(v))}
-              />
-            </div>
+            {activeRcmPreset ? (
+              <>
+                <p className="section-label">Display</p>
+                <div className="control-grid compact-grid">
+                  <SelectField
+                    id="renderMode"
+                    label="Notation"
+                    value={sharedSettings.renderMode}
+                    options={renderModeOptions}
+                    onChange={(v) => updateShared('renderMode', v)}
+                  />
+                  <SelectField
+                    id="displayScale"
+                    label="Display size"
+                    value={sharedSettings.displayScale}
+                    options={DISPLAY_SIZE_OPTIONS}
+                    onChange={(v) => updateShared('displayScale', Number(v))}
+                  />
+                </div>
 
-            <div className="toggles">
-              <ToggleField
-                id="fingerings"
-                label="Fingerings"
-                checked={sharedSettings.showFingerings}
-                onChange={(v) => updateShared('showFingerings', v)}
-              />
-              <ToggleField
-                id="showDetails"
-                label="Show details"
-                checked={sharedSettings.showDetails}
-                onChange={(v) => updateShared('showDetails', v)}
-              />
-              <ToggleField
-                id="pairRelativeKeys"
-                label="Pair relative keys"
-                checked={sharedSettings.pairRelativeKeys}
-                onChange={(v) => updateShared('pairRelativeKeys', v)}
-              />
-              <ToggleField
-                id="groupByKey"
-                label="Group by key"
-                checked={sharedSettings.groupByKey}
-                onChange={(v) => updateShared('groupByKey', v)}
-              />
-            </div>
+                <div className="toggles">
+                  <ToggleField
+                    id="fingerings"
+                    label="Fingerings"
+                    checked={sharedSettings.showFingerings}
+                    onChange={(v) => updateShared('showFingerings', v)}
+                  />
+                  <ToggleField
+                    id="showDetails"
+                    label="Show details"
+                    checked={sharedSettings.showDetails}
+                    onChange={(v) => updateShared('showDetails', v)}
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="section-label">Settings</p>
+                <div className="control-grid">
+                  <SelectField
+                    id="keyOrder"
+                    label="Key order"
+                    value={sharedSettings.keyOrder}
+                    options={keyOrderOptions}
+                    onChange={(v) => updateShared('keyOrder', v)}
+                  />
+                  <SelectField
+                    id="renderMode"
+                    label="Notation"
+                    value={sharedSettings.renderMode}
+                    options={renderModeOptions}
+                    onChange={(v) => updateShared('renderMode', v)}
+                  />
+                  <SelectField
+                    id="hand"
+                    label="Hand"
+                    value={sharedSettings.hand}
+                    options={handOptions}
+                    onChange={(v) => updateShared('hand', v)}
+                  />
+                  <SelectField
+                    id="direction"
+                    label="Direction"
+                    value={sharedSettings.direction}
+                    options={directionOptions}
+                    onChange={(v) => updateShared('direction', v)}
+                  />
+                  <SelectField
+                    id="duration"
+                    label="Duration"
+                    value={sharedSettings.duration}
+                    options={DURATION_OPTIONS}
+                    onChange={(v) => updateShared('duration', Number(v))}
+                  />
+                  <SelectField
+                    id="displayScale"
+                    label="Display size"
+                    value={sharedSettings.displayScale}
+                    options={DISPLAY_SIZE_OPTIONS}
+                    onChange={(v) => updateShared('displayScale', Number(v))}
+                  />
+                </div>
+
+                <div className="toggles">
+                  <ToggleField
+                    id="fingerings"
+                    label="Fingerings"
+                    checked={sharedSettings.showFingerings}
+                    onChange={(v) => updateShared('showFingerings', v)}
+                  />
+                  <ToggleField
+                    id="showDetails"
+                    label="Show details"
+                    checked={sharedSettings.showDetails}
+                    onChange={(v) => updateShared('showDetails', v)}
+                  />
+                  <ToggleField
+                    id="pairRelativeKeys"
+                    label="Pair relative keys"
+                    checked={sharedSettings.pairRelativeKeys}
+                    onChange={(v) => updateShared('pairRelativeKeys', v)}
+                  />
+                  <ToggleField
+                    id="groupByKey"
+                    label="Group by key"
+                    checked={sharedSettings.groupByKey}
+                    onChange={(v) => updateShared('groupByKey', v)}
+                  />
+                </div>
+              </>
+            )}
 
             {/* Custom Mode: Title + Technique Sections */}
-            {activePreset === PRESETS.CUSTOM && (
+            {isCustomPreset && (
               <>
                 <hr className="section-divider" />
                 <p className="section-label">Collection Title</p>
@@ -1218,7 +1306,7 @@ export default function TechniqueCollectionBuilder() {
           )}
           {!committedSettings ? (
             <div className="score-output collection-output">
-              <p className="empty-output">Choose a preset and click Generate.</p>
+              <p className="empty-output">Choose a template, an RCM level, or custom settings, then click Generate.</p>
             </div>
           ) : (
             <div className={`score-output collection-output${isRendering ? ' is-rendering' : ''}`}>

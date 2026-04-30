@@ -317,7 +317,14 @@ function clampScaleOctaves(octaves) {
   return Math.min(2, Math.max(1, Number(octaves) || DEFAULT_SETTINGS.octaves));
 }
 
+function explicitTechniqueOctaves(settings) {
+  const value = Number(settings.explicitOctaves);
+  return Number.isFinite(value) ? Math.max(1, value) : null;
+}
+
 function effectiveOctaves(settings) {
+  const explicitOctaves = explicitTechniqueOctaves(settings);
+
   if (settings.technique === TECHNIQUE_TYPES.CONTRARY_MOTION_SCALE) {
     return 2;
   }
@@ -327,7 +334,16 @@ function effectiveOctaves(settings) {
   }
 
   if (settings.technique === TECHNIQUE_TYPES.ARPEGGIO) {
+    if (explicitOctaves !== null) return explicitOctaves;
     return settings.brokenChord ? 1 : 2;
+  }
+
+  if (
+    settings.technique === TECHNIQUE_TYPES.TRIAD
+    || settings.technique === TECHNIQUE_TYPES.FOUR_NOTE_CHORD
+    || settings.technique === TECHNIQUE_TYPES.SEVENTH
+  ) {
+    if (explicitOctaves !== null) return explicitOctaves;
   }
 
   return 1;
@@ -1012,7 +1028,7 @@ function brokenChordGroupsForHand(settings, hand, option) {
     ? triadRootOctaveForKey(keyOption, handConfig.rootOctave)
     : seventhRootOctaveForKey(keyOption, handConfig);
   const rootPitch = pitchFromNote(keyOption.index, rootOctave);
-  const positionCount = option.intervals.length + 1;
+  const positionCount = effectiveOctaves(settings) * option.intervals.length + 1;
   const ascending = Array.from({ length: positionCount }, (_, position) => {
     const notes = spelledInversionChord(
       rootPitch,
@@ -1131,7 +1147,7 @@ function fourNoteChordGroupsForHand(settings, hand, option) {
   const rootOctave = triadRootOctaveForKey(keyOption, handConfig.rootOctave);
   const rootPitch = pitchFromNote(keyOption.index, rootOctave);
   const quality = option.value;
-  const positionCount = option.intervals.length + 1;
+  const positionCount = effectiveOctaves(settings) * option.intervals.length + 1;
 
   const ascending = Array.from({ length: positionCount }, (_, position) => {
     const notes = buildFourNoteChordNotes(
