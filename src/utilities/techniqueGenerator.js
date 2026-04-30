@@ -92,6 +92,7 @@ const CONTRARY_MOTION_CLEF_WINDOW = {
   endIndex: 37,
 };
 const MULTI_LINE_ENTRY_GAP = '0.2mm';
+const CONTRARY_MOTION_LINE_BREAK_GROUP_SIZE = 4;
 
 // ─── Chromatic scale helpers ───
 
@@ -931,7 +932,7 @@ function contraryMotionLeftHandTokens(scaleNotes, context, keyOption) {
   return tokens;
 }
 
-function contraryMotionScaleMusicForHand(settings, hand) {
+function contraryMotionScaleStateForHand(settings, hand) {
   const handConfig = HAND_CONFIG[hand];
   const keyOption = selectedKeyOption(settings);
   const spelling = selectedSpelling(settings);
@@ -1010,18 +1011,93 @@ function contraryMotionScaleMusicForHand(settings, hand) {
     };
   }
 
-  const context = {
-    ...handConfig,
+  return {
+    hand,
+    handConfig,
+    keyOption,
     spelling,
+    useKeySignature,
+    scaleNotes,
+  };
+}
+
+function contraryMotionTokensForHandState(settings, handState, scaleNotes = handState.scaleNotes) {
+  const context = {
+    ...handState.handConfig,
+    spelling: handState.spelling,
     duration: Number(settings.duration),
     showFingerings: settings.showFingerings,
-    useKeySignature,
+    useKeySignature: handState.useKeySignature,
   };
-  const tokens = hand === HANDS.LEFT
-    ? contraryMotionLeftHandTokens(scaleNotes, context, keyOption)
+
+  return handState.hand === HANDS.LEFT
+    ? contraryMotionLeftHandTokens(scaleNotes, context, handState.keyOption)
     : scaleNotes.map((note) => noteToken(note, context));
+}
+
+function contraryMotionScaleMusicForHand(settings, hand) {
+  const handState = contraryMotionScaleStateForHand(settings, hand);
+  const tokens = contraryMotionTokensForHandState(settings, handState);
 
   return musicLine(tokens);
+}
+
+function contraryMotionSplitIndex(scaleNotes) {
+  if (scaleNotes.length <= CONTRARY_MOTION_LINE_BREAK_GROUP_SIZE * 2) {
+    return scaleNotes.length;
+  }
+
+  const midpoint = scaleNotes.length / 2;
+  const lower = Math.floor(midpoint / CONTRARY_MOTION_LINE_BREAK_GROUP_SIZE)
+    * CONTRARY_MOTION_LINE_BREAK_GROUP_SIZE;
+  const upper = Math.ceil(midpoint / CONTRARY_MOTION_LINE_BREAK_GROUP_SIZE)
+    * CONTRARY_MOTION_LINE_BREAK_GROUP_SIZE;
+  const minSplit = CONTRARY_MOTION_LINE_BREAK_GROUP_SIZE;
+  const maxSplit = scaleNotes.length - CONTRARY_MOTION_LINE_BREAK_GROUP_SIZE;
+
+  if (lower < minSplit) return Math.min(maxSplit, upper);
+  if (upper > maxSplit) return Math.max(minSplit, lower);
+
+  return midpoint - lower <= upper - midpoint ? lower : upper;
+}
+
+function contraryMotionStavesLinesForSettings(settings) {
+  if (settings.technique !== TECHNIQUE_TYPES.CONTRARY_MOTION_SCALE) return null;
+
+  const hands = handsForSettings(settings);
+  const handStates = hands.map((hand) => contraryMotionScaleStateForHand(settings, hand));
+  const splitIndex = contraryMotionSplitIndex(handStates[0].scaleNotes);
+
+  if (splitIndex >= handStates[0].scaleNotes.length) return null;
+
+  return [
+    { start: 0, end: splitIndex },
+    { start: splitIndex, end: handStates[0].scaleNotes.length },
+  ].map(({ start, end }) => handStates.map((handState) => ({
+    clef: handState.handConfig.clef,
+    music: musicLine(contraryMotionTokensForHandState(settings, handState, handState.scaleNotes.slice(start, end))),
+    fingeringPosition: handState.handConfig.fingeringPosition,
+  })));
+}
+
+function scoreCallWithStaves(settings, staves, title, subtitle, options = {}) {
+  const key = keyForSettings(settings);
+  const systemSpacing = options.compact ? '2mm' : '9mm';
+
+  return `#score(
+  title: ${typstString(title)},
+  subtitle: ${subtitle ? typstString(subtitle) : 'none'},
+  key: ${typstString(key)},
+  staff-group: ${typstString(staffGroupForSettings(settings, staves))},
+  staff-size: ${staffSizeForSettings(settings)}mm,
+  staff-spacing: 9mm,
+  system-spacing: ${systemSpacing},
+  width: 235mm,
+  measure-numbers: "none",
+  staves: (
+${formatTypstStaves(staves)},
+  ),
+)`;
 }
 
 function brokenChordGroupsForHand(settings, hand, option) {
@@ -1565,23 +1641,23 @@ function scoreCallForSettingsGroup(
   const staves = settingsGroup.length === 1
     ? stavesForSettings(first)
     : stavesForSettingsGroup(settingsGroup, options);
-  const key = keyForSettings(first);
-  const systemSpacing = options.compact ? '2mm' : '9mm';
 
-  return `#score(
-  title: ${typstString(title)},
-  subtitle: ${subtitle ? typstString(subtitle) : 'none'},
-  key: ${typstString(key)},
-  staff-group: ${typstString(staffGroupForSettings(first, staves))},
-  staff-size: ${staffSizeForSettings(first)}mm,
-  staff-spacing: 9mm,
-  system-spacing: ${systemSpacing},
-  width: 235mm,
-  measure-numbers: "none",
-  staves: (
-${formatTypstStaves(staves)},
-  ),
-)`;
+  return scoreCallWithStaves(first, staves, title, subtitle, options);
+}
+
+function scoreCallsForSingleSetting(settings, title, subtitle, options = {}) {
+  const stavesLines = contraryMotionStavesLinesForSettings(settings);
+  if (!stavesLines) {
+    return [scoreCallForSettingsGroup([settings], title, subtitle, options)];
+  }
+
+  return stavesLines.map((staves, index) => scoreCallWithStaves(
+    settings,
+    staves,
+    index === 0 ? title : '',
+    index === 0 ? subtitle : '',
+    options,
+  ));
 }
 
 function scoreCallForSettings(
@@ -1590,7 +1666,8 @@ function scoreCallForSettings(
   subtitle = subtitleForSettings(settings),
   options = {},
 ) {
-  return scoreCallForSettingsGroup([settings], title, subtitle, options);
+  return scoreCallsForSingleSetting(settings, title, subtitle, options)
+    .join(`\n\n#v(${MULTI_LINE_ENTRY_GAP})\n\n`);
 }
 
 function collectionKeyOptions(settings, order) {
@@ -2563,8 +2640,17 @@ function techniqueCountForEntry(entry) {
 
 function scoreCallForEntry(entry, options = {}) {
   return settingsLinesForEntry(entry)
-    .map((settingsGroup, index) => {
+    .flatMap((settingsGroup, index) => {
       const first = settingsGroup[0];
+      if (settingsGroup.length === 1) {
+        return scoreCallsForSingleSetting(
+          first,
+          index === 0 ? entry.title : '',
+          index === 0 && options.showDetails ? subtitleForSettings(first) : '',
+          { compact: true, groupSeparator: entry.groupSeparator },
+        );
+      }
+
       return scoreCallForSettingsGroup(
         settingsGroup,
         index === 0 ? entry.title : '',
