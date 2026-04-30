@@ -91,6 +91,7 @@ const CONTRARY_MOTION_CLEF_WINDOW = {
   startIndex: 20,
   endIndex: 37,
 };
+const MULTI_LINE_ENTRY_GAP = '0.2mm';
 
 // ─── Chromatic scale helpers ───
 
@@ -2571,7 +2572,7 @@ function scoreCallForEntry(entry, options = {}) {
         { compact: true, groupSeparator: entry.groupSeparator },
       );
     })
-    .join('\n\n#v(0.5mm)\n\n');
+    .join(`\n\n#v(${MULTI_LINE_ENTRY_GAP})\n\n`);
 }
 
 function sourceForEntries(entries, options = {}) {
