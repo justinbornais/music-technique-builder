@@ -1094,6 +1094,9 @@ function contraryMotionStavesLinesForSettings(settings) {
 
 function scoreCallWithStaves(settings, staves, title, subtitle, options = {}) {
   const key = keyForSettings(settings);
+  const measuresPerLine = Number.isFinite(options.measuresPerLine)
+    ? options.measuresPerLine
+    : 'none';
 
   return `#score(
   title: ${typstString(title)},
@@ -1104,6 +1107,7 @@ function scoreCallWithStaves(settings, staves, title, subtitle, options = {}) {
   staff-spacing: 0mm,
   width: 235mm,
   measure-numbers: "none",
+  measures-per-line: ${measuresPerLine},
   staves: (
 ${formatTypstStaves(staves)},
   ),
@@ -2261,8 +2265,8 @@ function addArpeggioEntry(entries, collectionSettings, option, rootSettings) {
   if (option.chordSize === 4) {
     entries.push({
       settings: rootSettings,
-      settingsLines: [settingsGroup.slice(0, 2), settingsGroup.slice(2, 4)],
-      lineEndSeparators: [' | '],
+      settingsGroup,
+      measuresPerLine: 2,
       techniqueCount: settingsGroup.length,
       title: techniqueLabel(rootSettings),
     });
@@ -2671,6 +2675,7 @@ function scoreCallForEntry(entry, options = {}) {
           compact: true,
           groupSeparator: entry.groupSeparator,
           lineEndSeparator: entry.lineEndSeparators?.[index],
+          measuresPerLine: entry.measuresPerLine,
         },
       );
     })
@@ -2710,8 +2715,8 @@ function singleTechniqueEntryForSettings(settings) {
   if (option.chordSize === 4) {
     return {
       settings,
-      settingsLines: [settingsGroup.slice(0, 2), settingsGroup.slice(2, 4)],
-      lineEndSeparators: [' | '],
+      settingsGroup,
+      measuresPerLine: 2,
       techniqueCount: settingsGroup.length,
       title,
     };

@@ -203,7 +203,7 @@
   staff-group: "none",
   staff-size: 1.75mm,
   system-spacing: 12mm,
-  staff-spacing: 0mm,
+  staff-spacing: 8mm,
   lyric-line-spacing: none,
   color: none,
   note-colors: none,
