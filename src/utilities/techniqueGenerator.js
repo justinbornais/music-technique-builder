@@ -1104,6 +1104,7 @@ function scoreCallWithStaves(settings, staves, title, subtitle, options = {}) {
   key: ${typstString(key)},
   staff-group: ${typstString(staffGroupForSettings(settings, staves))},
   staff-size: ${staffSizeForSettings(settings)}mm,
+  system-spacing: 0mm,
   staff-spacing: 0mm,
   width: 235mm,
   measure-numbers: "none",
