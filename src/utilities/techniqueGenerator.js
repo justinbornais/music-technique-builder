@@ -1633,9 +1633,10 @@ function stavesForSettingsGroup(settingsGroup, options = {}) {
     const config = HAND_CONFIG[hand];
     const separator = options.groupSeparator
       ?? (hand === HANDS.LEFT && needsLeftHandClefReset ? ' | bass ' : ' | ');
+    const lineEndSeparator = options.lineEndSeparator ?? '';
     return {
       clef: config.clef,
-      music: settingsGroup.map((settings) => musicForHand(settings, hand)).join(separator),
+      music: `${settingsGroup.map((settings) => musicForHand(settings, hand)).join(separator)}${lineEndSeparator}`,
       fingeringPosition: config.fingeringPosition,
     };
   });
@@ -2261,6 +2262,7 @@ function addArpeggioEntry(entries, collectionSettings, option, rootSettings) {
     entries.push({
       settings: rootSettings,
       settingsLines: [settingsGroup.slice(0, 2), settingsGroup.slice(2, 4)],
+      lineEndSeparators: [' | '],
       techniqueCount: settingsGroup.length,
       title: techniqueLabel(rootSettings),
     });
@@ -2665,7 +2667,11 @@ function scoreCallForEntry(entry, options = {}) {
         settingsGroup,
         index === 0 ? entry.title : '',
         index === 0 && options.showDetails ? subtitleForSettings(first) : '',
-        { compact: true, groupSeparator: entry.groupSeparator },
+        {
+          compact: true,
+          groupSeparator: entry.groupSeparator,
+          lineEndSeparator: entry.lineEndSeparators?.[index],
+        },
       );
     })
     .join(`\n\n#v(${MULTI_LINE_ENTRY_GAP})\n\n`);
