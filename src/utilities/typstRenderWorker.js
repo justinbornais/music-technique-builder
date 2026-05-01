@@ -3,6 +3,7 @@ import { TypstSnippet } from '@myriaddreamin/typst.ts/contrib/snippet';
 import compilerWasmUrl from '@myriaddreamin/typst-ts-web-compiler/pkg/typst_ts_web_compiler_bg.wasm?url';
 import rendererWasmUrl from '@myriaddreamin/typst-ts-renderer/pkg/typst_ts_renderer_bg.wasm?url';
 import scorifyWasmUrl from '../typst/scorify/scorify_wasm.wasm?url';
+import { trimEmbeddedSystemSvg } from './trimEmbeddedSystemSvg.js';
 
 const scorifySources = import.meta.glob('../typst/scorify/**/*.{typ,json}', {
   query: '?raw',
@@ -94,7 +95,7 @@ async function renderTypstSvg(source) {
     throw new Error('Typst did not return SVG output.');
   }
 
-  return svg;
+  return trimEmbeddedSystemSvg(svg);
 }
 
 self.onmessage = async (event) => {
